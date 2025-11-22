@@ -41,6 +41,7 @@
 </template>
 
 <script setup>
+
 // 后续逻辑占位：引入Pinia仓库
 // import { useParamStore } from '@/stores/paramStore'
 // const paramStore = useParamStore()
