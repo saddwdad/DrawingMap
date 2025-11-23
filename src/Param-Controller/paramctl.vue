@@ -3,6 +3,22 @@
     <h3 class="param-title">
       <i class="fa-solid fa-sliders"></i> 参数设置
     </h3>
+    <!-- 画布缩放控制 -->
+    <div class="param-item">
+      <label class="param-label">画布缩放</label>
+      <div class="slider-group">
+        <input 
+          type="range" 
+          class="param-slider" 
+          min="0.2" 
+          max="5" 
+          step="0.1"
+          :value="canvasStore.scale"
+          @input="canvasStore.scale = Number($event.target.value)"
+        >
+        <span class="slider-value">{{ canvasStore.scalePercent }}</span>
+      </div>
+    </div>
     <!-- 颜色选择 -->
     <div class="param-item">
       <label class="param-label">图形颜色</label>
@@ -43,8 +59,8 @@
 <script setup>
 
 // 后续逻辑占位：引入Pinia仓库
-// import { useParamStore } from '@/stores/paramStore'
-// const paramStore = useParamStore()
+import { useCanvasStore } from '@/Stores/canvasStore'
+const canvasStore = useCanvasStore()
 </script>
 
 <style scoped>
