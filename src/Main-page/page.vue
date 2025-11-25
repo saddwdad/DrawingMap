@@ -31,24 +31,23 @@
         <!-- 新增：画布控制按钮（测试缩放/重置） -->
         <div class="canvas-control">
           <p>当前缩放：{{ canvasStore.scalePercent }}</p>
-          <a-button size="small" type="primary" @click="canvasStore.resetCanvas()">重置画布</a-button>
+          <a-button size="small" type="primary" @click="canvasStore.resetCanvas()">重置画布位置</a-button>
         </div>
       </div>
-
       <!-- 核心：画布容器（固定铺满屏幕，位置不动） -->
-      <div class="canvas-container" ref="canvasContainerRef" @wheel="canvasStore.handleWheelScale($event)">
-        <!-- 画布内容（可缩放、可拖动，样式由canvasStore管理） -->
-        <div class="canvas-content" ref="canvasContentRef" :style="canvasStore.canvasContentStyle">
-          <!-- 内容占位：模拟Pixi画布的内容，后续替换为Pixi挂载点 -->
-          <div class="canvas-placeholder">
-            <i class="fa-solid fa-paintbrush canvas-icon"></i>
-            <p class="canvas-tip">画布内容区（滚轮缩放 | 鼠标拖动）</p>
-            <p class="canvas-subtip">缩放后可拖动查看不同区域</p>
-          </div>
-          <!-- 预留Pixi挂载点：后续接入时隐藏占位符，显示此节点 -->
-          <div id="pixi-mount-point" class="pixi-mount"></div>
+      <div class="canvas-container" ref="canvasContainerRef" 
+           @wheel="handleScale"
+           @mousedown="startDrag"
+           @mousemove="dragCanvas"
+           @mouseup="endDrag"
+           @mouseleave="endDrag"
+           :style="{cursor: isDragging ? 'grabbing' : 'grab'}">
+        <!-- 画布内容（可缩放、可拖动，样式由pixi管理） -->
+
+          <canvas id="pixi-mount" ref="pixiMountRef">
+          </canvas>
         </div>
-      </div>
+
     </a-layout-content>
 
     <!-- 底部页脚 -->
@@ -59,52 +58,201 @@
 </template>
 
 <script setup>
-import { defineComponent, h, createVNode, ref, onMounted, onUnmounted } from 'vue'
+import { defineComponent, h, createVNode, watch, ref, onMounted, onUnmounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { FontAwesomeIcon  } from '@fortawesome/vue-fontawesome'
 import { faPalette } from '@fortawesome/free-solid-svg-icons'
 // 引入子组件
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
-
+import * as PIXI from 'pixi.js'
 // 引入AntD图标
 import { SaveOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
 
-import { useUiStore } from '@/Stores/UIStore'
-import { useCanvasStore } from '@/Stores/canvasStore'
+import { useUiStore } from '@/Main-page/Store/UIStore'
+import { useCanvasStore } from '@/Main-page/Store/canvasStore'
+
+
+
+
+
+
+const canvasContainerRef = ref(null)
+const pixiMountRef = ref(null)
+const toolbarRef = ref(null)
+let app = null
+let stage = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
+const { 
+    scaleCanvas, 
+    resetCanvas,
+    startDrag,
+    dragCanvas,
+    dragViewport,
+    endDrag,
+    isDragging
+} = canvasStore
 
-// DOM引用
-const toolbarRef = ref(null)
-const canvasContainerRef = ref(null)
-const canvasContentRef = ref(null)
+const resizePixi = () => {
+    if (!app || !canvasContainerRef.value) return;
 
-// 销毁函数
-let destroyToolbarDrag = null
-let destroyContentDrag = null
+    const { clientWidth, clientHeight } = canvasContainerRef.value;
+    // 1. 更新 Store 中的视口尺寸
+    canvasStore.initViewportSize(clientWidth, clientHeight);
+    // 2. 重新设置 Pixi 渲染器的尺寸
+    app.renderer.resize(clientWidth, clientHeight);
+    // 3. 重新设置 Stage 的 position (确保它位于容器的视觉中心)
+    if (stage) {
+        stage.position.set(clientWidth / 2, clientHeight / 2);
+    }
+    // 4. 强制更新一次视口
+    updatePixiViewport();
+}
 
-// 组件挂载：初始化交互
-onMounted(() => {
-  // 初始化工具栏拖拽
-  if (canvasContainerRef.value) {
-    const { width, height } = canvasContainerRef.value.getBoundingClientRect()
-    canvasStore.setContentSize(width, height) // 调用新增的方法
+const initPixi = () => {
+  if (!canvasContainerRef.value || !pixiMountRef.value) return
+
+  const { width, height } = canvasContainerRef.value.getBoundingClientRect()
+  // 1. 创建 Pixi 应用
+  canvasStore.initViewportSize(width,height)
+  app = new PIXI.Application();
+  app.init(
+    {
+    width: width,
+    height: height,
+    backgroundColor: 0x1a1a1a, // 对应 Store 的 bgColor
+    canvas: pixiMountRef.value,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true
   }
+)
+  // 2. 创建根容器（作为视角容器，所有内容都放在这个容器里）
+  stage = new PIXI.Container()
+  app.stage.addChild(stage)
   
-  if (toolbarRef.value) {
-    destroyToolbarDrag = uiStore.initToolbarDrag(toolbarRef.value)
+  // 3. 关联 Store 视角状态（初始同步）
+  updatePixiViewport()
+
+  // 4. 测试：添加无限网格（验证真无限）
+  drawInfiniteGrid(stage)
+
+}
+
+
+// 同步 Store 视角到 Pixi 容器
+const updatePixiViewport = () => {
+  if (!stage || !canvasContainerRef.value) return
+  // Pixi 通过 pivot + position 控制视角（核心：无尺寸限制）
+  stage.pivot.set(canvasStore.viewport.x, canvasStore.viewport.y)
+  stage.scale.set(canvasStore.viewport.scale, canvasStore.viewport.scale)
+  stage.position.set(
+    canvasContainerRef.value.clientWidth / 2,
+    canvasContainerRef.value.clientHeight / 2
+  )
+}
+
+// 绘制无限网格（示例：基于坐标系统，无尺寸限制）
+
+
+const drawInfiniteGrid = (container) => {
+  const grid = new PIXI.Graphics()
+  const gridSize = 50 // 网格间距
+  const gridColor = 0xffffff // 网格颜色
+  const maxRange = 100000 // 真正无限（可设为较大值优化性能，如100000）
+  const thinLineStyle = {
+    width: 1, 
+    color: gridColor,
+    alpha: 0.5 
+  };
+  grid.setStrokeStyle(thinLineStyle);
+  // 绘制水平线
+  for (let y = -maxRange; y < maxRange; y += gridSize) {
+    grid.moveTo(-maxRange, y)
+    grid.lineTo(maxRange, y)
   }
-  // 初始化画布内容拖拽
-  if (canvasContentRef.value) {
-    destroyContentDrag = canvasStore.initContentDrag(canvasContentRef.value)
+  // 绘制垂直线
+  for (let x = -maxRange; x < maxRange; x += gridSize) {
+    grid.moveTo(x, -maxRange)
+    grid.lineTo(x, maxRange)
+  }
+  grid.stroke();
+  const centerLineStyle = { width: 2, color: 0xbe4a60, alpha: 0.8 };
+  grid.stroke(centerLineStyle); 
+
+  // X 轴
+  grid.moveTo(-maxRange, 0);
+  grid.lineTo(maxRange, 0);
+  
+  // Y 轴
+  grid.moveTo(0, -maxRange);
+  grid.lineTo(0, maxRange);
+
+  grid.stroke();
+
+  container.addChild(grid)
+}
+
+
+const handleScale = (e) => {
+  const delta = e.deltaY > 0 ? -canvasStore.scalestep : canvasStore.scalestep
+  canvasStore.scaleViewport(e, delta)
+}
+
+
+watch(canvasStore.viewport, updatePixiViewport, { deep: true })
+
+// 组件生命周期
+onMounted(() => {
+  initPixi()
+  window.addEventListener('resize', resizePixi)
+  if (toolbarRef.value) {
+    // 调用 Store 的 Action，并将返回的销毁函数保存起来
+    uiStore.destroyToolbarDrag = uiStore.initToolbarDrag(toolbarRef.value);
+  }
+  const container = canvasContainerRef.value;
+  // 绑定拖拽事件（直接绑定到容器，无需 DOM 尺寸）
+  if(container){
+  canvasContainerRef.value.addEventListener('mousedown', startDrag)
+  canvasContainerRef.value.addEventListener('mousemove', dragViewport)
+  canvasContainerRef.value.addEventListener('mouseup', endDrag)
+  canvasContainerRef.value.addEventListener('mouseleave', endDrag)
+  }
+
+})
+
+onUnmounted(() => {
+  // 销毁 Pixi 实例
+  window.removeEventListener('resize', resizePixi)
+  if (app) {
+    app.destroy(true, { children: true, texture: true });
+    // 移除canvas元素（可选）
+    pixiMountRef.value?.remove();
+  }
+  if (uiStore.destroyToolbarDrag) {
+    uiStore.destroyToolbarDrag();
+  }
+  // 移除事件
+  const container = canvasContainerRef.value;
+  if (container) { 
+    container.removeEventListener('mousedown', startDrag);
+    container.removeEventListener('mousemove', dragViewport);
+    container.removeEventListener('mouseup', endDrag);
+    container.removeEventListener('mouseleave', endDrag);
   }
 })
 
-// 组件卸载：销毁事件
-onUnmounted(() => {
-  if (destroyToolbarDrag) destroyToolbarDrag()
-  if (destroyContentDrag) destroyContentDrag()
-})
+
+const { 
+    canvasStyle, 
+    scalePercent, 
+    minimapViewportStyle,
+    
+} = storeToRefs(canvasStore)
+
+
+
+
 
 
 
@@ -118,10 +266,7 @@ const FaPalette = defineComponent({
   }
 })
 
-// 后续逻辑占位：引入Pinia仓库、初始化Pixi
-// import { useToolStore } from '@/stores/toolStore'
-// import * as PIXI from 'pixi.js'
-// const toolStore = useToolStore()
+
 </script>
 
 <style scoped>
@@ -173,6 +318,8 @@ const FaPalette = defineComponent({
   align-items: center;
 }
 
+
+
 /* 主内容区：画布容器的父容器 */
 .main-content {
   background: #f5f7fa;
@@ -191,6 +338,8 @@ const FaPalette = defineComponent({
   padding: 0; /* 去掉外层内边距，避免宽度膨胀 */
   width: 220px; /* 强制和参数面板宽度一致 */
   border: 1px solid #f0f0f0; /* 强制和参数面板边框一致 */
+  top: 20px;
+  left: 20px;
 }
 
 /* 拖动条：紧贴顶部，圆角和容器统一 */
@@ -262,15 +411,29 @@ const FaPalette = defineComponent({
   position: relative; 
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  background: #fff;
+  /* background: #fff; */
+}
+
+#pixi-mount {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: none;
+  outline: none;
 }
 
 /* 画布内容（可缩放、可拖动） */
 .canvas-content {
-  position: absolute;
+  width: 100%;
+  height: 100%;
+  /* 3. 可选：加最小宽高，避免画布为空时看不见 */
+  /* min-width: 1800px; */
+  /* min-height: 1000px; */
+  
+  /* position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%); /* 初始居中 */
+  transform: translate(-50%, -50%); 初始居中 */
   /* 核心样式由Pinia的canvasContentStyle提供，这里仅保留基础定位 */
 }
 
@@ -305,11 +468,7 @@ const FaPalette = defineComponent({
 }
 
 /* Pixi挂载点：初始隐藏，后续接入时显示 */
-.pixi-mount {
-  width: 100%;
-  height: 100%;
-  display: none;
-}
+
 
 /* 底部页脚 */
 .main-footer {

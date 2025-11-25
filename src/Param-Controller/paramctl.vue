@@ -10,11 +10,11 @@
         <input 
           type="range" 
           class="param-slider" 
-          min="0.2" 
-          max="5" 
+          min="0.1" 
+          max="10" 
           step="0.1"
-          :value="canvasStore.scale"
-          @input="canvasStore.scale = Number($event.target.value)"
+          :value="canvasStore.viewport.scale"
+          @input="canvasStore.setScale( Number($event.target.value) )"
         >
         <span class="slider-value">{{ canvasStore.scalePercent }}</span>
       </div>
@@ -59,7 +59,7 @@
 <script setup>
 
 // 后续逻辑占位：引入Pinia仓库
-import { useCanvasStore } from '@/Stores/canvasStore'
+import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 const canvasStore = useCanvasStore()
 </script>
 
