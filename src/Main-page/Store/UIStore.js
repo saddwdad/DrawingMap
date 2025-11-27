@@ -56,6 +56,7 @@ export const useUiStore = defineStore('ui', {
 
       // 鼠标按下：开始拖拽
       const handleMouseDown = (e) => {
+        // 只有当点击的是拖动手柄或工具栏本身（不包括内部按钮）时才开始拖动
         if (e.target.classList.contains('drag-handle') || e.target === toolbarEl) {
           this.toolbar.isDragging = true
           this.dragTemp.startX = e.clientX
@@ -63,6 +64,8 @@ export const useUiStore = defineStore('ui', {
           this.dragTemp.startLeft = this.toolbar.position.left
           this.dragTemp.startTop = this.toolbar.position.top
           e.preventDefault()
+          // 阻止事件冒泡，避免与其他事件冲突
+          e.stopPropagation()
         }
       }
 

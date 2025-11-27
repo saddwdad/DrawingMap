@@ -22,45 +22,96 @@
     <!-- 颜色选择 -->
     <div class="param-item">
       <label class="param-label">图形颜色</label>
-      <input type="color" class="color-input" value="#42b983">
+      <input 
+        type="color" 
+        class="color-input" 
+        :value="canvasStore.currentColor"
+        @input="canvasStore.setCurrentColor($event.target.value)"
+      >
     </div>
     <!-- 大小滑块 -->
     <div class="param-item">
       <label class="param-label">图形大小</label>
       <div class="slider-group">
-        <input type="range" class="param-slider" min="20" max="200" value="100">
-        <span class="slider-value">100px</span>
+        <input 
+          type="range" 
+          class="param-slider" 
+          min="20" 
+          max="200" 
+          :value="canvasStore.currentSize"
+          @input="canvasStore.setCurrentSize(Number($event.target.value))"
+        >
+        <span class="slider-value">{{ canvasStore.currentSize }}px</span>
       </div>
     </div>
     <!-- 透明度滑块 -->
     <div class="param-item">
       <label class="param-label">透明度</label>
       <div class="slider-group">
-        <input type="range" class="param-slider" min="0.1" max="1" step="0.1" value="1">
-        <span class="slider-value">1</span>
+        <input 
+          type="range" 
+          class="param-slider" 
+          min="0.1" 
+          max="1" 
+          step="0.1" 
+          :value="canvasStore.currentOpacity"
+          @input="canvasStore.setCurrentOpacity(Number($event.target.value))"
+        >
+        <span class="slider-value">{{ canvasStore.currentOpacity }}</span>
       </div>
     </div>
-    <!-- 线宽设置 -->
+    <!-- 边框宽度设置 -->
     <div class="param-item">
       <label class="param-label">边框宽度</label>
       <div class="slider-group">
-        <input type="range" class="param-slider" min="1" max="20" value="2">
-        <span class="slider-value">2px</span>
+        <input 
+          type="range" 
+          class="param-slider" 
+          min="1" 
+          max="20" 
+          :value="canvasStore.currentBorderWidth"
+          @input="canvasStore.setCurrentBorderWidth(Number($event.target.value))"
+        >
+        <span class="slider-value">{{ canvasStore.currentBorderWidth }}px</span>
       </div>
     </div>
-    <!-- 额外功能按钮（纯UI） -->
+    <!-- 边框颜色选择 -->
+    <div class="param-item">
+      <label class="param-label">边框颜色</label>
+      <input 
+        type="color" 
+        class="color-input" 
+        :value="canvasStore.currentBorderColor"
+        @input="canvasStore.setCurrentBorderColor($event.target.value)"
+      >
+    </div>
+    <!-- 额外功能按钮 -->
     <div class="param-actions">
-      <button class="action-btn apply-btn">应用参数</button>
-      <button class="action-btn reset-btn">重置参数</button>
+      <button class="action-btn apply-btn" @click="applyParams">应用参数</button>
+      <button class="action-btn reset-btn" @click="resetParams">重置参数</button>
     </div>
   </div>
 </template>
 
 <script setup>
 
-// 后续逻辑占位：引入Pinia仓库
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 const canvasStore = useCanvasStore()
+
+// 应用参数（当前实现中参数是实时生效的，此按钮可用于未来扩展）
+const applyParams = () => {
+  // 目前参数是实时生效的，此方法可用于未来需要批量应用参数的场景
+  console.log('参数已应用')
+}
+
+// 重置参数
+const resetParams = () => {
+  canvasStore.setCurrentColor('#42b983')
+  canvasStore.setCurrentSize(100)
+  canvasStore.setCurrentBorderWidth(2)
+  canvasStore.setCurrentBorderColor('#333')
+  canvasStore.setCurrentOpacity(1)
+}
 </script>
 
 <style scoped>
