@@ -10,6 +10,8 @@ export const useCanvasStore = defineStore('canvas', {
     },
     isDragging: false, // 是否正在拖动内容
     dragStart: { x: 0, y: 0 },
+    dragRafId: null,
+    lastDragDelta: { dx: 0, dy: 0 },
     bgColor: '#1a1a1a', // 内容背景色
     borderColor: '#333', // 内容边框色
     scalestep: 0.1,
@@ -37,6 +39,8 @@ export const useCanvasStore = defineStore('canvas', {
     currentLineThrough: false,
     // 图片相关状态
     currentFilters: { grayscale: false, blur: 0, brightness: 1 },
+    pendingItem: null,
+    pendingType: null,
   }),
   getters: {
     viewportTransform(state) {
@@ -68,6 +72,7 @@ export const useCanvasStore = defineStore('canvas', {
       // 直接设置拖动状态
       this.isDragging = true
       this.dragStart = { x: e.clientX, y: e.clientY }
+      this.lastDragDelta = { dx: 0, dy: 0 }
     },
 
     // 拖动视口
@@ -75,19 +80,35 @@ export const useCanvasStore = defineStore('canvas', {
       if (!this.isDragging) return
       const dx = (e.clientX - this.dragStart.x) / this.viewport.scale
       const dy = (e.clientY - this.dragStart.y) / this.viewport.scale
-      this.viewport.x -= dx
-      this.viewport.y -= dy
       this.dragStart = { x: e.clientX, y: e.clientY }
+      this.lastDragDelta = { dx, dy }
+      if (!this.dragRafId) {
+        this.dragRafId = requestAnimationFrame(() => {
+          const { dx: rdx, dy: rdy } = this.lastDragDelta
+          this.viewport.x -= rdx
+          this.viewport.y -= rdy
+          this.dragRafId = null
+        })
+      }
     },
 
     // 结束拖动
     endDrag() {
       this.isDragging = false
+      if (this.dragRafId) {
+        cancelAnimationFrame(this.dragRafId)
+        this.dragRafId = null
+      }
     },
 
     // 设置当前工具
     setCurrentTool(tool) {
       this.currentTool = tool;
+      if (this.pendingItem) {
+        try { this.pendingItem.destroy?.() } catch { }
+      }
+      this.pendingItem = null
+      this.pendingType = null
     },
 
     // 设置当前颜色
@@ -117,7 +138,7 @@ export const useCanvasStore = defineStore('canvas', {
 
     // 绘制图形
     drawShape(x, y, type) {
-      console.log('drawShape调用:', { type, x, y });
+      console.log('drawShape调用:');
       if (!this.renderer) {
         console.log('renderer不存在');
         return;
@@ -136,7 +157,7 @@ export const useCanvasStore = defineStore('canvas', {
 
       switch (type) {
         case 'rect':
-          console.log('绘制矩形');
+          console.log(`绘制矩形, x:${x}, y:${y}`);
           this.renderer.renderRect(x, y, this.currentSize, this.currentSize, options);
           break;
         case 'circle':
@@ -150,6 +171,52 @@ export const useCanvasStore = defineStore('canvas', {
         default:
           console.log('未知工具类型:', type);
           break;
+      }
+    },
+
+    preparePending(type) {
+      if (!this.renderer) return
+      const options = {
+        background: this.currentColor,
+        'border-width': this.currentBorderWidth,
+        'border-color': this.currentBorderColor
+      }
+      if (type === 'rect') {
+        this.pendingItem = this.renderer.createRect(this.currentSize, this.currentSize, options)
+      } else if (type === 'circle') {
+        this.pendingItem = this.renderer.createCircle(this.currentSize / 2, options)
+      } else if (type === 'triangle') {
+        this.pendingItem = this.renderer.createTriangle(this.currentSize, options)
+      } else {
+        this.pendingItem = null
+      }
+      this.pendingType = this.pendingItem ? type : null
+    },
+
+    preparePendingText(text) {
+      if (!this.renderer) return
+      const textOptions = {
+        'font-family': this.currentFontFamily,
+        'font-size': this.currentFontSize,
+        color: this.currentTextColor,
+        background: this.currentTextBackground,
+        bold: this.currentBold,
+        italic: this.currentItalic,
+        underline: this.currentUnderline,
+        lineThrough: this.currentLineThrough
+      }
+      this.pendingItem = this.renderer.createText(text || '', textOptions)
+      this.pendingType = 'pen'
+    },
+
+    finalizePending(x, y) {
+      if (!this.renderer) return
+      if (!this.pendingItem) return
+      this.renderer.addToStage(this.pendingItem, x, y)
+      this.pendingItem = null
+      this.pendingType = null
+      if (this.currentTool === 'rect' || this.currentTool === 'circle' || this.currentTool === 'triangle') {
+        this.preparePending(this.currentTool)
       }
     },
 
@@ -202,6 +269,22 @@ export const useCanvasStore = defineStore('canvas', {
       };
 
       return this.renderer.renderText(x, y, text, textOptions);
+    },
+
+    screenToWorld(mouseX, mouseY) {
+      const centerX = this.minimap.viewportSize.width / 2
+      const centerY = this.minimap.viewportSize.height / 2
+      const worldX = this.viewport.x + (mouseX - centerX) / this.viewport.scale
+      const worldY = this.viewport.y + (mouseY - centerY) / this.viewport.scale
+      return { x: worldX, y: worldY }
+    },
+
+    worldToScreen(worldX, worldY) {
+      const centerX = this.minimap.viewportSize.width / 2
+      const centerY = this.minimap.viewportSize.height / 2
+      const screenX = centerX + (worldX - this.viewport.x) * this.viewport.scale
+      const screenY = centerY + (worldY - this.viewport.y) * this.viewport.scale
+      return { x: screenX, y: screenY }
     },
 
     // 设置文本属性

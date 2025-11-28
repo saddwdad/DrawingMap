@@ -90,6 +90,7 @@ const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)
 const toolbarRef = ref(null)
 const fileInputRef = ref(null)
+let resizeObserver = null
 let app = null
 let stage = null
 let renderer = null
@@ -122,14 +123,14 @@ const resizePixi = () => {
 }
 
 // 初始化Pixi应用
-const initPixi = () => {
+const initPixi = async () => {
   if (!canvasContainerRef.value || !pixiMountRef.value) return
 
   const { width, height } = canvasContainerRef.value.getBoundingClientRect()
   // 1. 创建 Pixi 应用
   canvasStore.initViewportSize(width,height)
   app = new PIXI.Application();
-  app.init(
+  await app.init(
     {
     width: width,
     height: height,
@@ -143,7 +144,12 @@ const initPixi = () => {
   stage = new PIXI.Container()
   app.stage.addChild(stage)
   
-  // 3. 关联 Store 视角状态（初始同步）
+  // 3. 初始同步：直接按当前容器尺寸将舞台居中，并应用视口变换
+  stage.pivot.set(canvasStore.viewport.x, canvasStore.viewport.y)
+  stage.scale.set(canvasStore.viewport.scale, canvasStore.viewport.scale)
+  stage.position.set(width / 2, height / 2)
+  
+  // 再次调用一次通用更新函数，确保与后续逻辑保持一致
   updatePixiViewport()
 
   // 4. 测试：添加无限网格（验证真无限）
@@ -174,41 +180,20 @@ const handleCanvasClick = (event) => {
   // 1. 计算鼠标在容器内的坐标（相对于容器左上角）
   const mouseX = event.clientX - containerRect.left;
   const mouseY = event.clientY - containerRect.top;
-  console.log('鼠标在容器内的坐标:', { mouseX, mouseY });
-  
-  // 2. 计算容器中心点坐标
-  const centerX = containerRect.width / 2;
-  const centerY = containerRect.height / 2;
-  
-  // 3. 计算鼠标相对于中心点的偏移量（屏幕坐标）
-  const screenOffsetX = mouseX - centerX;
-  const screenOffsetY = mouseY - centerY;
-  console.log('相对于中心点的屏幕偏移:', { screenOffsetX, screenOffsetY });
-  
-  // 4. 获取当前视口状态
-  const { x: viewportX, y: viewportY, scale } = canvasStore.viewport;
-  console.log('当前视口状态:', { viewportX, viewportY, scale });
-  
-  // 5. 将屏幕偏移转换为世界坐标偏移（考虑缩放）
-  const worldOffsetX = screenOffsetX / scale;
-  const worldOffsetY = screenOffsetY / scale;
-  console.log('世界坐标偏移:', { worldOffsetX, worldOffsetY });
-  
-  // 6. 计算最终的世界坐标（考虑视口位置）
-  // 注意：这里的计算应该是减去视口位置，因为视口的pivot已经包含了画布的偏移
-  const x = worldOffsetX - viewportX;
-  const y = worldOffsetY - viewportY;
-  console.log('最终世界坐标:', { x, y });
+  const { x, y } = canvasStore.screenToWorld(mouseX, mouseY);
   
   // 根据当前工具执行不同操作
+  if (canvasStore.pendingItem) {
+    canvasStore.finalizePending(x, y)
+    return
+  }
   if (currentTool === 'pen') {
-    // 画笔工具：输入文本
     const text = prompt('请输入要添加的文本：');
     if (text) {
-      canvasStore.renderText(x, y, text);
+      canvasStore.preparePendingText(text)
+      canvasStore.finalizePending(x, y)
     }
   } else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'triangle') {
-    // 其他工具：绘制图形
     canvasStore.drawShape(x, y, currentTool);
   }
 }
@@ -298,13 +283,28 @@ const triggerFileInput = () => {
 // 同步 Store 视角到 Pixi 容器
 const updatePixiViewport = () => {
   if (!stage || !canvasContainerRef.value) return
+  
+  // 优先使用 app.screen (如果已初始化)，否则使用容器尺寸
+  let width = canvasContainerRef.value.clientWidth;
+  let height = canvasContainerRef.value.clientHeight;
+  
+  if (app && app.renderer) { // 检查 renderer 是否存在
+      try {
+          width = app.screen.width;
+          height = app.screen.height;
+      } catch (e) {
+          console.warn('updatePixiViewport: app.screen 访问失败，回退到容器尺寸', e);
+      }
+  }
+
   // Pixi 通过 pivot + position 控制视角（核心：无尺寸限制）
   stage.pivot.set(canvasStore.viewport.x, canvasStore.viewport.y)
   stage.scale.set(canvasStore.viewport.scale, canvasStore.viewport.scale)
-  stage.position.set(
-    canvasContainerRef.value.clientWidth / 2,
-    canvasContainerRef.value.clientHeight / 2
-  )
+  
+  // 确保 position 位于屏幕中心
+  if (width > 0 && height > 0) {
+      stage.position.set(width / 2, height / 2)
+  }
 }
 
 // 绘制无限网格（示例：基于坐标系统，无尺寸限制）
@@ -360,6 +360,15 @@ watch(canvasStore.viewport, updatePixiViewport, { deep: true })
 // 组件生命周期
 onMounted(() => {
   initPixi()
+  
+  // 使用 ResizeObserver 监听容器大小变化，确保布局准确
+  if (canvasContainerRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+        resizePixi();
+    });
+    resizeObserver.observe(canvasContainerRef.value);
+  }
+
   window.addEventListener('resize', resizePixi)
   if (toolbarRef.value) {
     // 调用 Store 的 Action，并将返回的销毁函数保存起来
@@ -374,6 +383,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   // 销毁 Pixi 实例
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   window.removeEventListener('resize', resizePixi)
   if (app) {
     app.destroy(true, { children: true, texture: true });

@@ -71,6 +71,13 @@ const handleToolClick = (toolType, e) => {
   } else if (toolType === 'picture') {
     // 触发文件选择对话框
     document.dispatchEvent(new CustomEvent('triggerFileInput'));
+  } else if (toolType === 'rect' || toolType === 'circle' || toolType === 'triangle') {
+    canvasStore.preparePending(toolType)
+  } else if (toolType === 'pen') {
+    const text = window.prompt('请输入要添加的文本：')
+    if (text !== null && text !== undefined) {
+      canvasStore.preparePendingText(text)
+    }
   }
 }
 </script>
