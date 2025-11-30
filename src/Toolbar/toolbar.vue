@@ -21,7 +21,7 @@
 <script setup>
 
 import { ref, createVNode, h, computed } from 'vue' 
-import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined} from '@ant-design/icons-vue'
+import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined} from '@ant-design/icons-vue'
 import circle from '@/icons/circle.vue'
 import square from '@/icons/square.vue'
 import triangle from '@/icons/triangle.vue'
@@ -43,7 +43,9 @@ const FaEraser = () => {
 }
 
 const toolList = [
-  { type: 'pen', name: '画笔', icon: EditOutlined },
+  // 新增：选择工具，用于点击对象进入编辑
+  { type: 'select', name: '选择', icon: SelectOutlined },
+  { type: 'pen', name: '文本', icon: EditOutlined },
   { type: 'rect', name: '矩形', icon: square },
   { type: 'circle', name: '圆形', icon: circle },
   { type: 'triangle', name: '三角形', icon: triangle},
@@ -74,10 +76,8 @@ const handleToolClick = (toolType, e) => {
   } else if (toolType === 'rect' || toolType === 'circle' || toolType === 'triangle') {
     canvasStore.preparePending(toolType)
   } else if (toolType === 'pen') {
-    const text = window.prompt('请输入要添加的文本：')
-    if (text !== null && text !== undefined) {
-      canvasStore.preparePendingText(text)
-    }
+    // 文本工具：使用参数面板中的文本内容，不再弹窗
+    canvasStore.preparePendingText(canvasStore.currentTextContent)
   }
 }
 </script>

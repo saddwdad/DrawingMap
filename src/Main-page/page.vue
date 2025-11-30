@@ -50,7 +50,7 @@
           type="file" 
           ref="fileInputRef" 
           style="display: none;" 
-          accept="image/png, image/jpeg" 
+          accept="image/*" 
           @change="handleFileUpload"
         >
       </div>
@@ -105,9 +105,11 @@ const {
     endDrag,
     isDragging
 } = canvasStore
+// 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
+const isErasing = ref(false)
 
 const resizePixi = () => {
-    if (!app || !canvasContainerRef.value) return;
+    if (!app || !app.renderer || !canvasContainerRef.value) return;
 
     const { clientWidth, clientHeight } = canvasContainerRef.value;
     // 1. 更新 Store 中的视口尺寸
@@ -175,24 +177,25 @@ const handleCanvasClick = (event) => {
   console.log('handleCanvasClick触发，当前工具:', currentTool);
   
   // 获取画布容器的实际尺寸
-  const containerRect = canvasContainerRef.value.getBoundingClientRect();
-  
-  // 1. 计算鼠标在容器内的坐标（相对于容器左上角）
-  const mouseX = event.clientX - containerRect.left;
-  const mouseY = event.clientY - containerRect.top;
+  const rect = pixiMountRef.value.getBoundingClientRect();
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+  // 使用统一的坐标转换方法
   const { x, y } = canvasStore.screenToWorld(mouseX, mouseY);
   
-  // 根据当前工具执行不同操作
-  if (canvasStore.pendingItem) {
+  // 根据当前工具执行不同操作（优先处理pending预览）
+  if (canvasStore.pendingItem || (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl)) {
     canvasStore.finalizePending(x, y)
     return
   }
+  // 选择工具：仅用于点击对象选中，不在画布空白处执行绘制
+  if (currentTool === 'select') {
+    return
+  }
   if (currentTool === 'pen') {
-    const text = prompt('请输入要添加的文本：');
-    if (text) {
-      canvasStore.preparePendingText(text)
-      canvasStore.finalizePending(x, y)
-    }
+    // 文本工具：使用面板文本内容直接放置
+    canvasStore.preparePendingText(canvasStore.currentTextContent)
+    canvasStore.finalizePending(x, y)
   } else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'triangle') {
     canvasStore.drawShape(x, y, currentTool);
   }
@@ -207,24 +210,55 @@ const handleMouseDown = (e) => {
     startDrag(e);
   }
   // 左键按下时，不执行拖动画布，由Pixi的点击事件处理绘制
+  if (e.button === 0 && canvasStore.currentTool === 'eraser') {
+    // 开始擦除：记录状态并在当前点进行一次擦除
+    isErasing.value = true
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
+    canvasStore.eraseAt(x, y)
+  }
 }
 
 // 处理鼠标移动事件
-const handleMouseMove = (e) => {
-  // 只有在拖动状态下才执行拖动
+  const handleMouseMove = (e) => {
   if (canvasStore.isDragging) {
     dragViewport(e);
+    return;
+  }
+  // 拖拽中持续擦除：将屏幕坐标转换为世界坐标并调用擦除
+  if (isErasing.value && canvasStore.currentTool === 'eraser') {
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
+    canvasStore.eraseAt(x, y)
+    return;
+  }
+  if (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl) {
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY);
+    if (canvasStore.pendingItem) {
+      try { canvasStore.pendingItem.position.set(x, y); } catch {}
+    }
   }
 }
 
 // 处理鼠标释放事件
 const handleMouseUp = (e) => {
   endDrag(e);
+  // 结束擦除
+  isErasing.value = false
 }
 
 // 处理鼠标离开事件
 const handleMouseLeave = (e) => {
   endDrag(e);
+  // 离开画布时结束擦除
+  isErasing.value = false
 }
 
 // 获取光标样式
@@ -243,7 +277,7 @@ const getCursorStyle = () => {
     case 'triangle':
       return 'crosshair'; // 绘制工具使用十字光标
     case 'picture':
-      return 'pointer'; // 图片工具使用指针光标
+      return 'crosshair';
     case 'eraser':
       return 'cell'; // 橡皮擦工具使用单元格光标
     default:
@@ -257,16 +291,16 @@ const handleFileUpload = (event) => {
   if (!file) return;
   
   // 检查文件类型
-  if (!file.type.match('image/(png|jpeg)')) {
-    alert('请选择PNG或JPEG格式的图片');
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('请选择图片文件');
     return;
   }
   
   const reader = new FileReader();
   reader.onload = (e) => {
     const imageUrl = e.target.result;
-    // 在画布中心渲染图片
-    canvasStore.renderImage(0, 0, imageUrl);
+    console.log('handleFileUpload onload', { imageUrlLength: imageUrl?.length })
+    canvasStore.preparePendingImage(imageUrl);
   };
   reader.readAsDataURL(file);
   
@@ -349,6 +383,7 @@ const drawInfiniteGrid = (container) => {
 }
 
 
+// 处理鼠标滚轮缩放事件
 const handleScale = (e) => {
   const delta = e.deltaY > 0 ? -canvasStore.scalestep : canvasStore.scalestep
   canvasStore.scaleViewport(e, delta)
@@ -358,8 +393,8 @@ const handleScale = (e) => {
 watch(canvasStore.viewport, updatePixiViewport, { deep: true })
 
 // 组件生命周期
-onMounted(() => {
-  initPixi()
+onMounted(async () => {
+  await initPixi()
   
   // 使用 ResizeObserver 监听容器大小变化，确保布局准确
   if (canvasContainerRef.value) {
@@ -420,6 +455,7 @@ const {
 
 
 
+// 自定义FontAwesome图标组件：用于渲染调色板图标
 const FaPalette = defineComponent({
   render() {
     return h(FontAwesomeIcon, {

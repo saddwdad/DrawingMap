@@ -41,6 +41,12 @@ export const useCanvasStore = defineStore('canvas', {
     currentFilters: { grayscale: false, blur: 0, brightness: 1 },
     pendingItem: null,
     pendingType: null,
+    pendingImageUrl: null,
+    // 选中对象状态：用于参数面板编辑已存在对象
+    selectedObject: null,
+    selectedType: null,
+    // 文本内容：用于文本工具的输入来源
+    currentTextContent: ''
   }),
   getters: {
     viewportTransform(state) {
@@ -59,6 +65,12 @@ export const useCanvasStore = defineStore('canvas', {
     // 设置渲染器
     setRenderer(renderer) {
       this.renderer = renderer;
+      if (this.renderer) {
+        // 注入选择回调：点击对象即设置选中态
+        this.renderer.onSelect = (obj) => {
+          this.setSelected(obj)
+        }
+      }
     },
 
     // 初始化视口大小
@@ -114,26 +126,60 @@ export const useCanvasStore = defineStore('canvas', {
     // 设置当前颜色
     setCurrentColor(color) {
       this.currentColor = color;
+      // 实时应用到选中对象
+      if (this.selectedObject) {
+        if (this.selectedType === 'rect' || this.selectedType === 'circle' || this.selectedType === 'triangle') {
+          this.renderer?.updateShape(this.selectedObject, { background: color })
+        } else if (this.selectedType === 'text') {
+          this.renderer?.updateShape(this.selectedObject, { color })
+        }
+      }
     },
 
     // 设置当前大小
     setCurrentSize(size) {
       this.currentSize = size;
+      // 形状选中时动态调整几何尺寸
+      if (this.selectedObject && (this.selectedType === 'rect' || this.selectedType === 'circle' || this.selectedType === 'triangle')) {
+        const props = {}
+        if (this.selectedType === 'rect') {
+          props.width = size; props.height = size
+        } else if (this.selectedType === 'circle') {
+          props.radius = Math.max(1, size / 2)
+        } else if (this.selectedType === 'triangle') {
+          props.size = size
+        }
+        this.renderer?.updateShape(this.selectedObject, props)
+      } else if (this.selectedType === 'text') {
+        this.renderer?.updateShape(this.selectedObject, { 'font-size': size })
+      }
     },
 
     // 设置当前边框宽度
     setCurrentBorderWidth(width) {
       this.currentBorderWidth = width;
+      // 形状选中时动态调整边框宽度
+      if (this.selectedObject && (this.selectedType === 'rect' || this.selectedType === 'circle' || this.selectedType === 'triangle')) {
+        this.renderer?.updateShape(this.selectedObject, { 'border-width': width })
+      }
     },
 
     // 设置当前边框颜色
     setCurrentBorderColor(color) {
       this.currentBorderColor = color;
+      // 形状选中时动态调整边框颜色
+      if (this.selectedObject && (this.selectedType === 'rect' || this.selectedType === 'circle' || this.selectedType === 'triangle')) {
+        this.renderer?.updateShape(this.selectedObject, { 'border-color': color })
+      }
     },
 
     // 设置当前透明度
     setCurrentOpacity(opacity) {
       this.currentOpacity = opacity;
+      // 选中对象透明度实时生效
+      if (this.selectedObject) {
+        this.renderer?.updateShape(this.selectedObject, { opacity })
+      }
     },
 
     // 绘制图形
@@ -174,6 +220,7 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
+    // 准备待绘制图形：创建对应类型的图形对象
     preparePending(type) {
       if (!this.renderer) return
       const options = {
@@ -205,12 +252,29 @@ export const useCanvasStore = defineStore('canvas', {
         underline: this.currentUnderline,
         lineThrough: this.currentLineThrough
       }
-      this.pendingItem = this.renderer.createText(text || '', textOptions)
+      // 使用参数面板的文本内容作为默认输入
+      this.pendingItem = this.renderer.createText(text || this.currentTextContent || '', textOptions)
       this.pendingType = 'pen'
     },
 
     finalizePending(x, y) {
       if (!this.renderer) return
+      if (this.pendingType === 'picture' && this.pendingImageUrl) {
+        const filters = this.currentFilters
+        const imageUrl = this.pendingImageUrl
+        // 先移除预览图片
+        if (this.pendingItem) {
+          this.renderer.stage.removeChild(this.pendingItem)
+          this.pendingItem.destroy()
+          this.pendingItem = null
+        }
+        // 异步渲染图片
+        this.renderer.renderImage(x, y, imageUrl, { filters })
+        // 清除pending状态
+        this.pendingImageUrl = null
+        this.pendingType = null
+        return
+      }
       if (!this.pendingItem) return
       this.renderer.addToStage(this.pendingItem, x, y)
       this.pendingItem = null
@@ -218,6 +282,13 @@ export const useCanvasStore = defineStore('canvas', {
       if (this.currentTool === 'rect' || this.currentTool === 'circle' || this.currentTool === 'triangle') {
         this.preparePending(this.currentTool)
       }
+    },
+
+    // 擦除入口：根据当前大小计算笔刷半径并委托渲染器删除命中的对象
+    eraseAt(x, y) {
+      if (!this.renderer) return
+      const radius = Math.max(1, (this.currentSize || 20) / 2)
+      this.renderer.eraseAt(x, y, radius)
     },
 
     // 清除画布
@@ -236,6 +307,7 @@ export const useCanvasStore = defineStore('canvas', {
       console.log('使用的坐标:', { x, y });
 
       const filters = options.filters || this.currentFilters;
+      console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filters })
       return this.renderer.renderImage(x, y, imageUrl, { filters });
     },
 
@@ -271,6 +343,7 @@ export const useCanvasStore = defineStore('canvas', {
       return this.renderer.renderText(x, y, text, textOptions);
     },
 
+    // 屏幕坐标转世界坐标：将鼠标在屏幕上的坐标转换为画布世界坐标
     screenToWorld(mouseX, mouseY) {
       const centerX = this.minimap.viewportSize.width / 2
       const centerY = this.minimap.viewportSize.height / 2
@@ -279,6 +352,7 @@ export const useCanvasStore = defineStore('canvas', {
       return { x: worldX, y: worldY }
     },
 
+    // 世界坐标转屏幕坐标：将画布世界坐标转换为屏幕坐标
     worldToScreen(worldX, worldY) {
       const centerX = this.minimap.viewportSize.width / 2
       const centerY = this.minimap.viewportSize.height / 2
@@ -290,6 +364,19 @@ export const useCanvasStore = defineStore('canvas', {
     // 设置文本属性
     setTextProperty(property, value) {
       this[`current${property.charAt(0).toUpperCase() + property.slice(1)}`] = value;
+      // 文本选中时，参数面板的设置实时应用
+      if (this.selectedType === 'text' && this.selectedObject) {
+        const props = {}
+        if (property === 'fontFamily') props['font-family'] = value
+        else if (property === 'fontSize') props['font-size'] = value
+        else if (property === 'textColor') props.color = value
+        else if (property === 'textBackground') props.background = value
+        else if (property === 'bold') props.bold = value
+        else if (property === 'italic') props.italic = value
+        else if (property === 'underline') props.underline = value
+        else if (property === 'lineThrough') props.lineThrough = value
+        this.renderer?.updateShape(this.selectedObject, props)
+      }
     },
 
     // 重置文本属性
@@ -302,6 +389,30 @@ export const useCanvasStore = defineStore('canvas', {
       this.currentItalic = false;
       this.currentUnderline = false;
       this.currentLineThrough = false;
+    },
+
+    // 选中对象管理
+    setSelected(obj) {
+      this.selectedObject = obj
+      let type = 'unknown'
+      try {
+        if (obj._shape?.type) type = obj._shape.type
+        else if (obj.constructor?.name === 'Text') type = 'text'
+      } catch { }
+      this.selectedType = type
+    },
+
+    clearSelection() {
+      this.selectedObject = null
+      this.selectedType = null
+    },
+
+    setCurrentTextContent(text) {
+      this.currentTextContent = text
+      // 修改选中文本的内容
+      if (this.selectedType === 'text' && this.selectedObject) {
+        this.renderer?.updateShape(this.selectedObject, { text })
+      }
     },
 
     scaleViewport(e, delta) {
@@ -339,6 +450,7 @@ export const useCanvasStore = defineStore('canvas', {
 
 
     },
+    // 设置画布缩放比例：确保缩放值在限制范围内
     setScale(newScale) {
       // 确保值在限制范围内
       const scale = Math.max(
@@ -354,6 +466,27 @@ export const useCanvasStore = defineStore('canvas', {
       this.viewport.y = 0
       this.viewport.scale = 1
       this.isDragging = false
+    },
+
+    // 将视口中心点设置为指定的世界坐标
+    centerViewportOn(x, y) {
+      this.viewport.x = x
+      this.viewport.y = y
+    },
+
+    preparePendingImage(imageUrl) {
+      if (!this.renderer) return
+      this.pendingImageUrl = imageUrl
+      this.pendingType = 'picture'
+      // 创建临时预览图片
+      this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
+        .then(sprite => {
+          if (sprite) {
+            this.pendingItem = sprite
+            // 将预览图片添加到舞台
+            this.renderer.stage.addChild(sprite)
+          }
+        })
     },
   },
 
