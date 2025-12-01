@@ -182,43 +182,43 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
-    // 绘制图形
-    drawShape(x, y, type) {
-      console.log('drawShape调用:');
-      if (!this.renderer) {
-        console.log('renderer不存在');
-        return;
-      }
+    // // 绘制图形
+    // drawShape(x, y, type) {
+    //   console.log('drawShape调用:');
+    //   if (!this.renderer) {
+    //     console.log('renderer不存在');
+    //     return;
+    //   }
 
-      // 不需要考虑画布当前的偏移量，因为stage的pivot会处理画布的偏移
-      // 直接使用相对于stage中心的坐标绘制图形
-      console.log('使用的坐标:', { x, y });
+    //   // 不需要考虑画布当前的偏移量，因为stage的pivot会处理画布的偏移
+    //   // 直接使用相对于stage中心的坐标绘制图形
+    //   console.log('使用的坐标:', { x, y });
 
-      const options = {
-        background: this.currentColor,
-        'border-width': this.currentBorderWidth,
-        'border-color': this.currentBorderColor
-      };
-      console.log('绘制选项:', options);
+    //   const options = {
+    //     background: this.currentColor,
+    //     'border-width': this.currentBorderWidth,
+    //     'border-color': this.currentBorderColor
+    //   };
+    //   console.log('绘制选项:', options);
 
-      switch (type) {
-        case 'rect':
-          console.log(`绘制矩形, x:${x}, y:${y}`);
-          this.renderer.renderRect(x, y, this.currentSize, this.currentSize, options);
-          break;
-        case 'circle':
-          console.log('绘制圆形');
-          this.renderer.renderCircle(x, y, this.currentSize / 2, options);
-          break;
-        case 'triangle':
-          console.log('绘制三角形');
-          this.renderer.renderTriangle(x, y, this.currentSize, options);
-          break;
-        default:
-          console.log('未知工具类型:', type);
-          break;
-      }
-    },
+    //   switch (type) {
+    //     case 'rect':
+    //       console.log(`绘制矩形, x:${x}, y:${y}`);
+    //       this.renderer.renderRect(x, y, this.currentSize, this.currentSize, options);
+    //       break;
+    //     case 'circle':
+    //       console.log('绘制圆形');
+    //       this.renderer.renderCircle(x, y, this.currentSize / 2, options);
+    //       break;
+    //     case 'triangle':
+    //       console.log('绘制三角形');
+    //       this.renderer.renderTriangle(x, y, this.currentSize, options);
+    //       break;
+    //     default:
+    //       console.log('未知工具类型:', type);
+    //       break;
+    //   }
+    // },
 
     // 准备待绘制图形：创建对应类型的图形对象
     preparePending(type) {

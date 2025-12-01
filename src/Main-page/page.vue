@@ -196,9 +196,9 @@ const handleCanvasClick = (event) => {
     // 文本工具：使用面板文本内容直接放置
     canvasStore.preparePendingText(canvasStore.currentTextContent)
     canvasStore.finalizePending(x, y)
-  } else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'triangle') {
-    canvasStore.drawShape(x, y, currentTool);
-  }
+  } //else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'triangle') {
+  //   canvasStore.drawShape(x, y, currentTool);
+  // }
 }
 
 // 处理鼠标按下事件 - 区分左键和右键
