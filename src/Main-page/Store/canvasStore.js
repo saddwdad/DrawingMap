@@ -85,7 +85,7 @@ export const useCanvasStore = defineStore('canvas', {
           const viewportH = viewportSize.height / viewportScale;
 
           // 🔴 第 3 层防护：renderer.objects 完全兜底（确保是数组，再过滤）
-          const objects = Array.isArray(renderer.objects) ? renderer.objects : [];
+          const objects = Array.isArray(state.objects) ? state.objects : [];
           // 最严格的有效对象过滤：排除所有非对象/无效属性
           const validObjects = objects.filter(obj => {
             return obj !== null && obj !== undefined && // 非空
