@@ -223,10 +223,17 @@ const handleCanvasClick = (event) => {
   const { x, y } = canvasStore.screenToWorld(mouseX, mouseY);
   
   // 根据当前工具执行不同操作（优先处理pending预览）
-  if (canvasStore.pendingItem || (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl)) {
+  if (canvasStore.pendingItem) {
     canvasStore.finalizePending(x, y)
     return
   }
+  if (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl){
+    console.log("开始渲染照片")
+    canvasStore.finalizePending(x, y)
+  }
+  // if (canvasStore.currentTool === 'picture'){
+  //   canvasStore.finalizePending(x, y)
+  // }
   // 选择工具：仅用于点击对象选中，不在画布空白处执行绘制
   if (currentTool === 'select') {
     return

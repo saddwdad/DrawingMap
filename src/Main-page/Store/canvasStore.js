@@ -361,25 +361,41 @@ worldBounds: (state) => {
       this.pendingType = 'pen'
     },
 
-    finalizePending(x, y) {
+    preparePendingImage(imageUrl) {
       if (!this.renderer) return
+      this.pendingImageUrl = imageUrl
+      this.pendingType = 'picture'
+      // // 创建临时预览图片
+      // this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
+      //   .then(sprite => {
+      //     if (sprite) {
+      //       this.pendingItem = sprite
+      //       // 将预览图片添加到舞台
+      //       this.renderer.stage.addChild(sprite)
+      //     }
+      //   })
+    },
+
+    finalizePending(x, y) {
+      if (!this.renderer) return console.log("无渲染器")
       if (this.pendingType === 'picture' && this.pendingImageUrl) {
         const filters = this.currentFilters
         const imageUrl = this.pendingImageUrl
-        // 先移除预览图片
-        if (this.pendingItem) {
-          this.renderer.stage.removeChild(this.pendingItem)
-          this.pendingItem.destroy()
-          this.pendingItem = null
-        }
-        // 异步渲染图片
+        // // 先移除预览图片
+        // if (this.pendingItem) {
+        //   this.renderer.stage.removeChild(this.pendingItem)
+        //   this.pendingItem.destroy()
+        //   this.pendingItem = null
+        // }
+        // 渲染图片
+        console.log("final渲染照片")
         this.renderer.renderImage(x, y, imageUrl, { filters })
         // 清除pending状态
         this.pendingImageUrl = null
         this.pendingType = null
         return
       }
-      if (!this.pendingItem) return
+      if (!this.pendingItem) return console.log("无预渲染")
       this.renderer.addToStage(this.pendingItem, x, y)
       this.pendingItem = null
       this.pendingType = null
@@ -586,21 +602,6 @@ worldBounds: (state) => {
     centerViewportOn(x, y) {
       this.viewport.x = x
       this.viewport.y = y
-    },
-
-    preparePendingImage(imageUrl) {
-      if (!this.renderer) return
-      this.pendingImageUrl = imageUrl
-      this.pendingType = 'picture'
-      // 创建临时预览图片
-      this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
-        .then(sprite => {
-          if (sprite) {
-            this.pendingItem = sprite
-            // 将预览图片添加到舞台
-            this.renderer.stage.addChild(sprite)
-          }
-        })
     },
   },
 

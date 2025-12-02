@@ -19,29 +19,29 @@ export class Renderer {
     this.miniMap.height = miniMapHeight;
     this.miniMap.x = 0; // 改为相对定位，由组件样式控制
     this.miniMap.y = 0;
-    
+
     // 小地图背景
     const miniMapBg = new PIXI.Graphics();
     miniMapBg.rect(0, 0, miniMapWidth, miniMapHeight);
     miniMapBg.fill(0x000000, 0.7);
     miniMapBg.stroke({ width: 2, color: 0xffffff });
     this.miniMap.addChild(miniMapBg);
-    
+
     // 小地图内容容器
     this.miniMapContent = new PIXI.Container();
     this.miniMap.addChild(this.miniMapContent);
-    
+
     // 视口框
     this.miniMapViewport = new PIXI.Graphics();
     this.miniMap.addChild(this.miniMapViewport);
-    
+
     // 点击事件
     this.miniMap.eventMode = 'static';
     this.miniMap.cursor = 'pointer';
     this.miniMap.on('pointerdown', (e) => {
       this.handleMiniMapClick(e, miniMapWidth, miniMapHeight);
     });
-    
+
     miniMapStage.addChild(this.miniMap);
     // 使用传入的缩放比例（来自canvasStore）
     this.miniMapScale = miniMapScale;
@@ -75,10 +75,28 @@ export class Renderer {
 
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {
-    console.log('Renderer.renderImage', { x, y, imageUrlLength: imageUrl?.length, options })
-    return this.createSpriteAsync(imageUrl, options).then(sprite => {
-      if (!sprite) return null
-      return this.addToStage(sprite, x, y)
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        try {
+          const texture = PIXI.Texture.from(img)
+          const sprite = new PIXI.Sprite(texture)
+          if (options.filters) {
+            sprite.filters = this.applyFilters(options.filters)
+          }
+          sprite.anchor.set(0.5)
+          const result = this.addToStage(sprite, x, y)
+          resolve(result)
+        } catch (error) {
+          console.error('图片渲染失败:', error)
+          resolve(null)
+        }
+      }
+      img.onerror = () => {
+        console.error('图片加载失败')
+        resolve(null)
+      }
+      img.src = imageUrl
     })
   }
 
@@ -105,7 +123,7 @@ export class Renderer {
     if (this.canvasStore && this.canvasStore.objects) {
       this.canvasStore.objects = [];
     }
-    
+
     if (this.miniMapContent) {
       this.miniMapContent.removeChildren();
     }
@@ -292,7 +310,7 @@ export class Renderer {
       if (this.canvasStore && this.canvasStore.objects) {
         this.canvasStore.objects = this.canvasStore.objects.filter(o => !removed.includes(o));
       }
-      this.renderMiniMap();  
+      this.renderMiniMap();
 
     }
     return removed.length
@@ -370,43 +388,43 @@ export class Renderer {
   }
 
   getWorldBounds() {
-    if (this.objects.length === 0) {
-      // 如果没有内容，返回一个以 (0,0) 为中心的默认小区域，防止除以零
-      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
-    }
+    if (this.objects.length === 0) {
+      // 如果没有内容，返回一个以 (0,0) 为中心的默认小区域，防止除以零
+      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
+    }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
 
-    for (const obj of this.objects) {
-      try {
-        // 获取对象相对于舞台（即世界坐标）的边界
-        const bounds = obj.getBounds(false);
+    for (const obj of this.objects) {
+      try {
+        // 获取对象相对于舞台（即世界坐标）的边界
+        const bounds = obj.getBounds(false);
 
-        minX = Math.min(minX, bounds.x);
-        minY = Math.min(minY, bounds.y);
-        maxX = Math.max(maxX, bounds.x + bounds.width);
-        maxY = Math.max(maxY, bounds.y + bounds.height);
-      } catch (e) {
-        console.error("Error getting bounds for object:", e);
-      }
-    }
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.width);
+        maxY = Math.max(maxY, bounds.y + bounds.height);
+      } catch (e) {
+        console.error("Error getting bounds for object:", e);
+      }
+    }
 
-    // 如果计算结果不合理（比如只有 Infinity），使用默认值
-    if (minX === Infinity) {
-      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
-    }
+    // 如果计算结果不合理（比如只有 Infinity），使用默认值
+    if (minX === Infinity) {
+      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
+    }
 
-    // 添加一个小的缓冲区域，使边界更美观
-    const buffer = 50;
-    minX -= buffer;
-    minY -= buffer;
-    maxX += buffer;
-    maxY += buffer;
+    // 添加一个小的缓冲区域，使边界更美观
+    const buffer = 50;
+    minX -= buffer;
+    minY -= buffer;
+    maxX += buffer;
+    maxY += buffer;
 
-    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
-  }
+    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+  }
 
 }
