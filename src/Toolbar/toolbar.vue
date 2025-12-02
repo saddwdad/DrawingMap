@@ -6,10 +6,11 @@
         v-for="tool in toolList"
         :key="tool.type"
         class="tool-btn"
-        :type="tool.type === 'Currenttool' ? 'primary' : 'default'" 
+        :type="tool.type === currentTool ? 'primary' : 'default'" 
         :icon="createVNode(tool.icon, {class: 'uniformIcon'})" 
         block
         shape="round"
+        @click="(e) => handleToolClick(tool.type, e)"
       >
         {{ tool.name }}
       </a-button>
@@ -19,13 +20,18 @@
 
 <script setup>
 
-import { ref, createVNode, h } from 'vue' 
-import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined} from '@ant-design/icons-vue'
+import { ref, createVNode, h, computed } from 'vue' 
+import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined} from '@ant-design/icons-vue'
 import circle from '@/icons/circle.vue'
 import square from '@/icons/square.vue'
 import triangle from '@/icons/triangle.vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import { faEraser } from '@fortawesome/free-solid-svg-icons'
+import { useCanvasStore } from '@/Main-page/Store/canvasStore'
+
+const canvasStore = useCanvasStore()
+// 直接从canvasStore获取当前工具，而不是使用本地ref
+const currentTool = computed(() => canvasStore.currentTool)
 
 const FaEraser = () => {
   // h(组件, 组件属性, 子节点)
@@ -37,7 +43,9 @@ const FaEraser = () => {
 }
 
 const toolList = [
-  { type: 'pen', name: '画笔', icon: EditOutlined },
+  // 新增：选择工具，用于点击对象进入编辑
+  { type: 'select', name: '选择', icon: SelectOutlined },
+  { type: 'pen', name: '文本', icon: EditOutlined },
   { type: 'rect', name: '矩形', icon: square },
   { type: 'circle', name: '圆形', icon: circle },
   { type: 'triangle', name: '三角形', icon: triangle},
@@ -47,9 +55,31 @@ const toolList = [
   { type: 'reset', name: '重置画布', icon: ReloadOutlined },
 ]
 
-// 后续逻辑占位：引入Pinia仓库
-// import { useToolStore } from '@/stores/toolStore'
-// const toolStore = useToolStore()
+const handleToolClick = (toolType, e) => {
+  // 阻止事件冒泡，避免影响工具栏拖动功能
+  e.stopPropagation();
+  
+  console.log('工具栏点击:', toolType);
+  // 直接调用canvasStore的方法设置当前工具，不需要手动更新currentTool
+  // currentTool是computed属性，会自动从canvasStore中获取值
+  canvasStore.setCurrentTool(toolType)
+  console.log('当前工具已设置:', canvasStore.currentTool);
+  
+  // 处理特殊工具
+  if (toolType === 'clear') {
+    canvasStore.clearCanvas()
+  } else if (toolType === 'reset') {
+    canvasStore.resetCanvas()
+  } else if (toolType === 'picture') {
+    // 触发文件选择对话框
+    document.dispatchEvent(new CustomEvent('triggerFileInput'));
+  } else if (toolType === 'rect' || toolType === 'circle' || toolType === 'triangle') {
+    canvasStore.preparePending(toolType)
+  } else if (toolType === 'pen') {
+    // 文本工具：使用参数面板中的文本内容，不再弹窗
+    canvasStore.preparePendingText(canvasStore.currentTextContent)
+  }
+}
 </script>
 
 <style scoped>
