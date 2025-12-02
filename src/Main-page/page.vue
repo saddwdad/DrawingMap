@@ -41,7 +41,7 @@
            @mousemove="handleMouseMove"
            @mouseup="handleMouseUp"
            @mouseleave="handleMouseLeave"
-           @contextmenu.prevent
+           @contextmenu.prevent = "handleCanvasContextMenu"
            :style="{cursor: getCursorStyle()}">
         <!-- 画布内容（可缩放、可拖动，样式由pixi管理） -->
         <canvas id="pixi-mount" ref="pixiMountRef"></canvas>
@@ -56,6 +56,7 @@
         <div class="floating-minimap">
           <minimap ref="minimapRef" />
         </div>
+        <contextMenu/>
       </div>
 
     </a-layout-content>
@@ -84,8 +85,9 @@ import { useUiStore } from '@/Main-page/Store/UIStore'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 // 引入渲染器
 import { Renderer } from '@/renderer/Renderer'
-
-
+import { useContextMenuStore } from './contextMenu/contextMenu'
+import contextMenu from './contextMenu/contextMenu.vue'
+import { context } from 'ant-design-vue/es/vc-image/src/PreviewGroup'
 
 
 
@@ -102,6 +104,7 @@ let renderer = null
 let minimapApp = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
+const contextMenuStore = useContextMenuStore()
 const { 
 
     minimap:minimapConfig,
@@ -250,10 +253,14 @@ const handleCanvasClick = (event) => {
 // 处理鼠标按下事件 - 区分左键和右键
 const handleMouseDown = (e) => {
   // 右键按下（按钮值为2）时，开始拖动画布
-  if (e.button === 2) {
+  if (e.button === 1 ) {
     // 阻止默认右键菜单
     e.preventDefault();
     startDrag(e);
+    contextMenuStore.hideMenu()
+  }
+  if (e.button === 0 ){
+    contextMenuStore.hideMenu()
   }
   // 左键按下时，不执行拖动画布，由Pixi的点击事件处理绘制
   if (e.button === 0 && canvasStore.currentTool === 'eraser') {
@@ -264,7 +271,10 @@ const handleMouseDown = (e) => {
     const mouseY = e.clientY - rect.top;
     const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
     canvasStore.eraseAt(x, y)
+    
   }
+
+
 }
 
 // 处理鼠标移动事件
@@ -524,6 +534,9 @@ const FaPalette = defineComponent({
   }
 })
 
+function handleCanvasContextMenu(e){
+  contextMenuStore.showMenu(e.clientX, e.clientY);
+}
 
 </script>
 
