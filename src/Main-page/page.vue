@@ -230,13 +230,12 @@ const handleCanvasClick = (event) => {
     canvasStore.finalizePending(x, y)
     return
   }
-  if (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl){
-    console.log("开始渲染照片")
-    canvasStore.finalizePending(x, y)
+  if (currentTool === 'picture') {
+    if (canvasStore.currentImageUrl) {
+      canvasStore.renderImage(x, y, canvasStore.currentImageUrl, { filters: canvasStore.currentImageFilter, scale: canvasStore.currentImageScale })
+    }
+    return
   }
-  // if (canvasStore.currentTool === 'picture'){
-  //   canvasStore.finalizePending(x, y)
-  // }
   // 选择工具：仅用于点击对象选中，不在画布空白处执行绘制
   if (currentTool === 'select') {
     return

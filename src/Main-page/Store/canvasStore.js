@@ -42,6 +42,9 @@ export const useCanvasStore = defineStore('canvas', {
     currentLineThrough: false,
     // 图片相关状态
     currentFilters: { grayscale: false, blur: 0, brightness: 1 },
+    currentImageUrl: null,
+    currentImageScale: 1,
+    currentImageFilter: 'none',
     pendingItem: null,
     pendingType: null,
     pendingImageUrl: null,
@@ -51,7 +54,7 @@ export const useCanvasStore = defineStore('canvas', {
     // 文本内容：用于文本工具的输入来源
     currentTextContent: '',
     //跟踪绘制对象
-    objects:[],
+    objects: [],
   }),
   getters: {
 
@@ -203,9 +206,9 @@ export const useCanvasStore = defineStore('canvas', {
     // 设置渲染器
     
     centerViewportOnWorldCoords(worldX, worldY) {
-      this.viewport.x = worldX
-      this.viewport.y = worldY
-    },
+      this.viewport.x = worldX
+      this.viewport.y = worldY
+    },
 
 
     setRenderer(renderer) {
@@ -218,7 +221,7 @@ export const useCanvasStore = defineStore('canvas', {
         this.renderer.setCanvasStore(this);
       }
     },
-    
+
 
 
 
@@ -226,7 +229,7 @@ export const useCanvasStore = defineStore('canvas', {
     initViewportSize(width, height) {
       this.minimap.viewportSize = { width, height }
     },
-   //更新位置
+    //更新位置
     updateViewportPosition(centerX, centerY) {
       this.centerViewportOn(centerX, centerY);
     },
@@ -494,15 +497,15 @@ export const useCanvasStore = defineStore('canvas', {
 
     // 清除画布
     clearCanvas() {
-    if (!this.renderer || !this.renderer.stage || !this.renderer.objects) return;
-      
+      if (!this.renderer || !this.renderer.stage || !this.renderer.objects) return;
+
       // 1. 移除舞台上所有子元素（视觉清除）
       this.renderer.stage.removeChildren();
-      
+
       // 2. 清空 objects 数组（数据清除，关键！）
       // 注意：要重新赋值数组，触发响应式更新（直接 splice 可能不触发）
       this.renderer.objects = [];
-      
+
       // 3. 清除 pending 状态（避免残留未完成的对象）
       this.pendingItem = null;
       this.pendingType = null;
@@ -517,14 +520,43 @@ export const useCanvasStore = defineStore('canvas', {
       // 直接使用相对于stage中心的坐标绘制图片
       console.log('使用的坐标:', { x, y });
 
-      const filters = options.filters || this.currentFilters;
-      console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filters })
-      return this.renderer.renderImage(x, y, imageUrl, { filters });
+      const filterMode = options.filters || this.currentImageFilter || 'none'
+      const scale = options.scale ?? this.currentImageScale ?? 1
+      console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filterMode, scale })
+      return this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale });
     },
 
     // 设置滤镜
     setFilter(filterName, value) {
       this.currentFilters[filterName] = value;
+    },
+
+    setCurrentImageUrl(url) {
+      this.currentImageUrl = url
+    },
+
+    setCurrentImageScale(scale) {
+      this.currentImageScale = Math.max(0.1, Math.min(10, Number(scale) || 1))
+      if (this.selectedType === 'Sprite' && this.selectedObject) {
+        try { this.selectedObject.scale.set(this.currentImageScale) } catch { }
+      }
+    },
+
+    setCurrentImageFilter(mode) {
+      this.currentImageFilter = mode || 'none'
+      if (this.selectedType === 'Sprite' && this.selectedObject) {
+        try {
+          const f = this.renderer?.applyFilters(this.currentImageFilter)
+          if (f && f.length) {
+            this.selectedObject.filters = f
+          } else {
+            if (this.currentImageFilter === 'warm') this.selectedObject.tint = 0xffcc99
+            else if (this.currentImageFilter === 'cool') this.selectedObject.tint = 0x99ccff
+            else if (this.currentImageFilter === 'green') this.selectedObject.tint = 0x66ff66
+            else this.selectedObject.tint = 0xffffff
+          }
+        } catch { }
+      }
     },
 
     // 重置滤镜

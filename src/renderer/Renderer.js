@@ -82,7 +82,17 @@ export class Renderer {
           const texture = PIXI.Texture.from(img)
           const sprite = new PIXI.Sprite(texture)
           if (options.filters) {
-            sprite.filters = this.applyFilters(options.filters)
+            const f = this.applyFilters(options.filters)
+            if (f && f.length) {
+              sprite.filters = f
+            } else if (typeof options.filters === 'string') {
+              if (options.filters === 'warm') sprite.tint = 0xffcc99
+              else if (options.filters === 'cool') sprite.tint = 0x99ccff
+              else if (options.filters === 'green') sprite.tint = 0x66ff66
+            }
+          }
+          if (typeof options.scale === 'number' && options.scale > 0) {
+            try { sprite.scale.set(options.scale) } catch { }
           }
           sprite.anchor.set(0.5)
           const result = this.addToStage(sprite, x, y)
@@ -107,10 +117,19 @@ export class Renderer {
   }
 
   // 应用滤镜
-  applyFilters() {
-    const filters = [];
-    // 暂时注释掉滤镜功能
-    return filters;
+  applyFilters(mode) {
+    const filters = []
+    try {
+      const CM = PIXI?.filters?.ColorMatrixFilter
+      if (CM) {
+        const cm = new CM()
+        if (mode === 'green') cm.tint(0x00ff00)
+        else if (mode === 'warm') cm.sepia(true)
+        else if (mode === 'cool') cm.hue(-30, true)
+        if (mode !== 'none') filters.push(cm)
+      }
+    } catch { }
+    return filters
   }
 
   // 清除所有渲染的对象
@@ -208,7 +227,17 @@ export class Renderer {
     const texture = PIXI.Texture.from(imageUrl)
     const sprite = new PIXI.Sprite(texture)
     if (options.filters) {
-      sprite.filters = this.applyFilters(options.filters)
+      const f = this.applyFilters(options.filters)
+      if (f && f.length) {
+        sprite.filters = f
+      } else if (typeof options.filters === 'string') {
+        if (options.filters === 'warm') sprite.tint = 0xffcc99
+        else if (options.filters === 'cool') sprite.tint = 0x99ccff
+        else if (options.filters === 'green') sprite.tint = 0x66ff66
+      }
+    }
+    if (typeof options.scale === 'number' && options.scale > 0) {
+      try { sprite.scale.set(options.scale) } catch { }
     }
     sprite.anchor.set(0.5)
     return sprite
