@@ -53,6 +53,9 @@
           accept="image/*" 
           @change="handleFileUpload"
         >
+        <div class="floating-minimap">
+          <minimap ref="minimapRef" />
+        </div>
       </div>
 
     </a-layout-content>
@@ -65,11 +68,12 @@
 </template>
 
 <script setup>
-import { defineComponent, h, createVNode, watch, ref, onMounted, onUnmounted } from 'vue'
+import { defineComponent, h, createVNode, computed, watch, ref, onMounted, onUnmounted, nextTick} from 'vue'
 import { storeToRefs } from 'pinia'
 import { FontAwesomeIcon  } from '@fortawesome/vue-fontawesome'
 import { faPalette } from '@fortawesome/free-solid-svg-icons'
 // 引入子组件
+import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
 import * as PIXI from 'pixi.js'
@@ -90,13 +94,21 @@ const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)
 const toolbarRef = ref(null)
 const fileInputRef = ref(null)
+const minimapRef = ref(null)
 let resizeObserver = null
 let app = null
 let stage = null
 let renderer = null
+let minimapApp = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
 const { 
+
+    minimap:minimapConfig,
+
+} = storeToRefs(canvasStore)
+
+const {
     scaleCanvas, 
     resetCanvas,
     startDrag,
@@ -107,7 +119,7 @@ const {
 } = canvasStore
 // 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
 const isErasing = ref(false)
-
+const objects = computed(() => canvasStore.renderer?.objects || [])
 const resizePixi = () => {
     if (!app || !app.renderer || !canvasContainerRef.value) return;
 
@@ -155,16 +167,43 @@ const initPixi = async () => {
   updatePixiViewport()
 
   // 4. 测试：添加无限网格（验证真无限）
-  drawInfiniteGrid(stage)
+  // drawInfiniteGrid(stage)
 
   // 5. 初始化渲染器并设置到store，直接使用stage作为绘制容器
   renderer = new Renderer(stage);
   canvasStore.setRenderer(renderer);
 
+  await nextTick()
+  if (minimapRef.value) {
+    // 修复：你的minimap.vue已经通过useCanvasStore获取了所有需要的状态，不需要传入renderer和scale
+    // 只需要调用initMiniMap，不需要传递额外参数（小地图内部会自己获取store数据）
+    minimapApp = await minimapRef.value.initMiniMap()
+  }
+
   // 6. 添加鼠标点击事件处理
   // 使用更可靠的方式：直接在canvas元素上绑定点击事件
   const canvas = pixiMountRef.value;
   canvas.addEventListener('click', handleCanvasClick);
+
+  watch(
+    viewport,
+    (newViewport) => {
+      // 增加空值检查（防御性编程）
+      if (!newViewport || !minimapConfig.value || !minimapConfig.value.viewportSize) return;
+      // 小地图内部会自己监听状态变化，不需要在这里手动调用renderer
+    },
+    { deep: true, immediate: true }
+  )
+
+  // 监听绘制对象变化，小地图会自动重绘（因为minimap.vue已经监听了objects）
+  watch(
+    () => objects.value.length,
+    () => {
+      // 不需要手动调用，小地图内部已处理
+    },
+    { immediate: true }
+  )
+
 }
 
 // 处理画布点击事件
@@ -222,8 +261,11 @@ const handleMouseDown = (e) => {
 }
 
 // 处理鼠标移动事件
+  let dragDebounceTimer = null;
   const handleMouseMove = (e) => {
-  if (canvasStore.isDragging) {
+    clearTimeout(dragDebounceTimer);
+  dragDebounceTimer = setTimeout(() =>{
+    if (canvasStore.isDragging) {
     dragViewport(e);
     return;
   }
@@ -245,7 +287,8 @@ const handleMouseDown = (e) => {
       try { canvasStore.pendingItem.position.set(x, y); } catch {}
     }
   }
-}
+    }, 0.1);
+  }
 
 // 处理鼠标释放事件
 const handleMouseUp = (e) => {
@@ -332,12 +375,14 @@ const updatePixiViewport = () => {
   }
 
   // Pixi 通过 pivot + position 控制视角（核心：无尺寸限制）
-  stage.pivot.set(canvasStore.viewport.x, canvasStore.viewport.y)
-  stage.scale.set(canvasStore.viewport.scale, canvasStore.viewport.scale)
-  
-  // 确保 position 位于屏幕中心
-  if (width > 0 && height > 0) {
-      stage.position.set(width / 2, height / 2)
+  if (stage.pivot.x !== viewport.value.x || stage.pivot.y !== viewport.value.y) {
+    stage.pivot.set(viewport.value.x, viewport.value.y)
+  }
+  if (stage.scale.x !== viewport.value.scale || stage.scale.y !== viewport.value.scale) {
+    stage.scale.set(viewport.value.scale, viewport.value.scale)
+  }
+  if (stage.position.x !== width / 2 || stage.position.y !== height / 2) {
+    stage.position.set(width / 2, height / 2)
   }
 }
 
@@ -348,7 +393,7 @@ const drawInfiniteGrid = (container) => {
   const grid = new PIXI.Graphics()
   const gridSize = 50 // 网格间距
   const gridColor = 0xffffff // 网格颜色
-  const maxRange = 100000 // 真正无限（可设为较大值优化性能，如100000）
+  const maxRange = 10000 // 真正无限（可设为较大值优化性能，如100000）
   const thinLineStyle = {
     width: 1, 
     color: gridColor,
@@ -418,6 +463,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   // 销毁 Pixi 实例
+  clearTimeout(dragDebounceTimer);
+
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
@@ -436,6 +483,10 @@ onUnmounted(() => {
   if (canvas) {
     canvas.removeEventListener('click', handleCanvasClick);
   }
+  if (minimapRef.value) {
+    minimapRef.value.destroyMiniMap()
+  }
+  minimapApp = null
   // 移除图片工具事件监听器
   document.removeEventListener('triggerFileInput', triggerFileInput);
 
@@ -446,7 +497,7 @@ const {
     canvasStyle, 
     scalePercent, 
     minimapViewportStyle,
-    
+    viewport
 } = storeToRefs(canvasStore)
 
 
@@ -470,6 +521,13 @@ const FaPalette = defineComponent({
 </script>
 
 <style scoped>
+
+.floating-minimap {
+  position: absolute;
+  top: 20px;
+  right: 240px; /* 与参数面板保持20px间距 */
+  z-index: 90;
+}
 
 .main-layout {
   min-height: 100vh;

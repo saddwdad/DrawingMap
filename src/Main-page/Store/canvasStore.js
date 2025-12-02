@@ -46,9 +46,100 @@ export const useCanvasStore = defineStore('canvas', {
     selectedObject: null,
     selectedType: null,
     // 文本内容：用于文本工具的输入来源
-    currentTextContent: ''
+    currentTextContent: '',
+    //跟踪绘制对象
+    objects:[],
   }),
   getters: {
+
+worldBounds: (state) => {
+      const renderer = state.renderer;
+      if (!renderer || !renderer.objects || renderer.objects.length === 0) {
+        // 无对象时，以当前视口为中心，扩展2倍视口大小作为边界
+        const viewportW = state.minimap.viewportSize.width / state.viewport.scale;
+        const viewportH = state.minimap.viewportSize.height / state.viewport.scale;
+        return {
+          minX: state.viewport.x - viewportW,
+          maxX: state.viewport.x + viewportW,
+          minY: state.viewport.y - viewportH,
+          maxY: state.viewport.y + viewportH,
+          width: viewportW * 2,
+          height: viewportH * 2
+        };
+      }
+
+      // 有对象时，计算包含所有对象和视口的边界
+      const objects = renderer.objects;
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+
+      // 遍历所有对象，计算对象边界
+      objects.forEach(obj => {
+        const shape = obj._shape || {};
+        let objMinX, objMaxX, objMinY, objMaxY;
+
+        switch (shape.type || obj.constructor?.name) {
+          case 'rect':
+            const rectW = shape.width || 100;
+            const rectH = shape.height || 100;
+            objMinX = obj.x - rectW / 2;
+            objMaxX = obj.x + rectW / 2;
+            objMinY = obj.y - rectH / 2;
+            objMaxY = obj.y + rectH / 2;
+            break;
+          case 'circle':
+            const radius = shape.radius || 50;
+            objMinX = obj.x - radius;
+            objMaxX = obj.x + radius;
+            objMinY = obj.y - radius;
+            objMaxY = obj.y + radius;
+            break;
+          case 'triangle':
+            const size = shape.size || 100;
+            objMinX = obj.x - size / 2;
+            objMaxX = obj.x + size / 2;
+            objMinY = obj.y - size / 2;
+            objMaxY = obj.y + size / 2;
+            break;
+          case 'text':
+          case 'Sprite':
+          default:
+            objMinX = obj.x - 20;
+            objMaxX = obj.x + 20;
+            objMinY = obj.y - 20;
+            objMaxY = obj.y + 20;
+            break;
+        }
+
+        minX = Math.min(minX, objMinX);
+        maxX = Math.max(maxX, objMaxX);
+        minY = Math.min(minY, objMinY);
+        maxY = Math.max(maxY, objMaxY);
+      });
+
+      // 扩展边界（增加20%的边距，避免对象贴边）
+      const paddingX = (maxX - minX) * 0.2;
+      const paddingY = (maxY - minY) * 0.2;
+      minX -= paddingX;
+      maxX += paddingX;
+      minY -= paddingY;
+      maxY += paddingY;
+
+      // 确保边界至少包含当前视口
+      const viewportW = state.minimap.viewportSize.width / state.viewport.scale;
+      const viewportH = state.minimap.viewportSize.height / state.viewport.scale;
+      minX = Math.min(minX, state.viewport.x - viewportW / 2);
+      maxX = Math.max(maxX, state.viewport.x + viewportW / 2);
+      minY = Math.min(minY, state.viewport.y - viewportH / 2);
+      maxY = Math.max(maxY, state.viewport.y + viewportH / 2);
+
+      return {
+        minX, maxX, minY, maxY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+    },
+
     viewportTransform(state) {
       return {
         x: state.viewport.x,
@@ -57,12 +148,17 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
-    scalePercent(state) {
-      return Math.round(state.viewport.scale * 100) + '%'
-    }
+    scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
     // 设置渲染器
+
+    centerViewportOnWorldCoords(worldX, worldY) {
+      this.viewport.x = worldX
+      this.viewport.y = worldY
+    },
+
+
     setRenderer(renderer) {
       this.renderer = renderer;
       if (this.renderer) {
@@ -70,12 +166,20 @@ export const useCanvasStore = defineStore('canvas', {
         this.renderer.onSelect = (obj) => {
           this.setSelected(obj)
         }
+        this.renderer.setCanvasStore(this);
       }
     },
+    
+
+
 
     // 初始化视口大小
     initViewportSize(width, height) {
       this.minimap.viewportSize = { width, height }
+    },
+   //更新位置
+    updateViewportPosition(centerX, centerY) {
+      this.centerViewportOn(centerX, centerY);
     },
 
     // 开始拖动
@@ -293,9 +397,19 @@ export const useCanvasStore = defineStore('canvas', {
 
     // 清除画布
     clearCanvas() {
-      if (this.renderer) {
-        this.renderer.clear();
-      }
+    if (!this.renderer || !this.renderer.stage || !this.renderer.objects) return;
+      
+      // 1. 移除舞台上所有子元素（视觉清除）
+      this.renderer.stage.removeChildren();
+      
+      // 2. 清空 objects 数组（数据清除，关键！）
+      // 注意：要重新赋值数组，触发响应式更新（直接 splice 可能不触发）
+      this.renderer.objects = [];
+      
+      // 3. 清除 pending 状态（避免残留未完成的对象）
+      this.pendingItem = null;
+      this.pendingType = null;
+      this.pendingImageUrl = null;
     },
 
     // 渲染图片

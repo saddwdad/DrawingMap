@@ -4,8 +4,55 @@ export class Renderer {
   constructor(stage) {
     this.stage = stage;
     this.objects = [];
+
     // 选择回调：由外部（Store）注入，用于对象被点击时通知选中
     this.onSelect = null;
+    this.onMinimapClick = null;
+    this.miniMap = null;
+    this.miniMapContent = null; // 新增：小地图内容容器引用
+    this.mainViewport = { x: 0, y: 0, width: 800, height: 600 };
+  }
+
+  initMiniMap(miniMapStage, miniMapWidth = 200, miniMapHeight = 150, miniMapScale = 0.1) {
+    this.miniMap = new PIXI.Container();
+    this.miniMap.width = miniMapWidth;
+    this.miniMap.height = miniMapHeight;
+    this.miniMap.x = 0; // 改为相对定位，由组件样式控制
+    this.miniMap.y = 0;
+    
+    // 小地图背景
+    const miniMapBg = new PIXI.Graphics();
+    miniMapBg.rect(0, 0, miniMapWidth, miniMapHeight);
+    miniMapBg.fill(0x000000, 0.7);
+    miniMapBg.stroke({ width: 2, color: 0xffffff });
+    this.miniMap.addChild(miniMapBg);
+    
+    // 小地图内容容器
+    this.miniMapContent = new PIXI.Container();
+    this.miniMap.addChild(this.miniMapContent);
+    
+    // 视口框
+    this.miniMapViewport = new PIXI.Graphics();
+    this.miniMap.addChild(this.miniMapViewport);
+    
+    // 点击事件
+    this.miniMap.eventMode = 'static';
+    this.miniMap.cursor = 'pointer';
+    this.miniMap.on('pointerdown', (e) => {
+      this.handleMiniMapClick(e, miniMapWidth, miniMapHeight);
+    });
+    
+    miniMapStage.addChild(this.miniMap);
+    // 使用传入的缩放比例（来自canvasStore）
+    this.miniMapScale = miniMapScale;
+  }
+
+  setCanvasStore(canvasStore) {
+    this.canvasStore = canvasStore;
+    // 初始化objects同步
+    if (canvasStore && !canvasStore.objects) {
+      canvasStore.objects = [...this.objects];
+    }
   }
 
   // 渲染矩形
@@ -55,6 +102,13 @@ export class Renderer {
       obj.destroy();
     });
     this.objects = [];
+    if (this.canvasStore && this.canvasStore.objects) {
+      this.canvasStore.objects = [];
+    }
+    
+    if (this.miniMapContent) {
+      this.miniMapContent.removeChildren();
+    }
   }
 
   // 创建矩形图形对象
@@ -189,6 +243,9 @@ export class Renderer {
     this.stage.addChild(display)
     this.objects.push(display)
     console.log(`x: ${x}, y: ${y}`)
+    if (this.canvasStore && this.canvasStore.objects) {
+      this.canvasStore.objects.push(display);
+    }
     // 选择支持：绑定指针事件，点击通知外部选中
     try {
       display.eventMode = 'static'
@@ -232,6 +289,11 @@ export class Renderer {
     }
     if (removed.length) {
       this.objects = this.objects.filter(o => !removed.includes(o))
+      if (this.canvasStore && this.canvasStore.objects) {
+        this.canvasStore.objects = this.canvasStore.objects.filter(o => !removed.includes(o));
+      }
+      this.renderMiniMap();  
+
     }
     return removed.length
   }
@@ -306,4 +368,45 @@ export class Renderer {
     display._style = next
     if (props.opacity !== undefined) display.alpha = props.opacity
   }
+
+  getWorldBounds() {
+    if (this.objects.length === 0) {
+      // 如果没有内容，返回一个以 (0,0) 为中心的默认小区域，防止除以零
+      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const obj of this.objects) {
+      try {
+        // 获取对象相对于舞台（即世界坐标）的边界
+        const bounds = obj.getBounds(false);
+
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.width);
+        maxY = Math.max(maxY, bounds.y + bounds.height);
+      } catch (e) {
+        console.error("Error getting bounds for object:", e);
+      }
+    }
+
+    // 如果计算结果不合理（比如只有 Infinity），使用默认值
+    if (minX === Infinity) {
+      return { minX: -100, minY: -100, maxX: 100, maxY: 100, width: 200, height: 200 };
+    }
+
+    // 添加一个小的缓冲区域，使边界更美观
+    const buffer = 50;
+    minX -= buffer;
+    minY -= buffer;
+    maxX += buffer;
+    maxY += buffer;
+
+    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+  }
+
 }
