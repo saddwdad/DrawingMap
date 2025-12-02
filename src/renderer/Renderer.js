@@ -55,23 +55,23 @@ export class Renderer {
     }
   }
 
-  // 渲染矩形
-  renderRect(x, y, width, height, options = {}) {
-    const g = this.createRect(width, height, options)
-    return this.addToStage(g, x, y)
-  }
+  // // 渲染矩形
+  // renderRect(x, y, width, height, options = {}) {
+  //   const g = this.createRect(width, height, options)
+  //   return this.addToStage(g, x, y)
+  // }
 
-  // 渲染圆形
-  renderCircle(x, y, radius, options = {}) {
-    const g = this.createCircle(radius, options)
-    return this.addToStage(g, x, y)
-  }
+  // // 渲染圆形
+  // renderCircle(x, y, radius, options = {}) {
+  //   const g = this.createCircle(radius, options)
+  //   return this.addToStage(g, x, y)
+  // }
 
-  // 渲染三角形
-  renderTriangle(x, y, size, options = {}) {
-    const g = this.createTriangle(size, options)
-    return this.addToStage(g, x, y)
-  }
+  // // 渲染三角形
+  // renderTriangle(x, y, size, options = {}) {
+  //   const g = this.createTriangle(size, options)
+  //   return this.addToStage(g, x, y)
+  // }
 
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {
