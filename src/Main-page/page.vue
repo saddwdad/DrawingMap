@@ -333,6 +333,7 @@ const getCursorStyle = () => {
     return 'grabbing';
   }
   
+  
   // 根据当前工具返回不同的光标
   const currentTool = canvasStore.currentTool;
   switch (currentTool) {
