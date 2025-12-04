@@ -32,7 +32,6 @@
         <div class="canvas-control">
           <p>当前缩放：{{ canvasStore.scalePercent }}</p>
           <a-button size="small" type="primary" @click="canvasStore.resetCanvas()">重置画布位置</a-button>
-          <a-button size="small" type="primary" @click="canvasStore.resetCanvas()">重置画布位置</a-button>
         </div>
       </div>
       <!-- 核心：画布容器（固定铺满屏幕，位置不动） -->
@@ -78,7 +77,6 @@ import { faPalette } from '@fortawesome/free-solid-svg-icons'
 import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
-import * as PIXI from 'pixi.js'
 import * as PIXI from 'pixi.js'
 // 引入AntD图标
 import { SaveOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
@@ -334,7 +332,6 @@ const getCursorStyle = () => {
   if (canvasStore.isDragging) {
     return 'grabbing';
   }
-  
   
   // 根据当前工具返回不同的光标
   const currentTool = canvasStore.currentTool;
@@ -606,8 +603,6 @@ function handleCanvasContextMenu(e){
 
 
 
-
-
 /* 主内容区：画布容器的父容器 */
 .main-content {
   background: #f5f7fa;
@@ -626,8 +621,6 @@ function handleCanvasContextMenu(e){
   padding: 0; /* 去掉外层内边距，避免宽度膨胀 */
   width: 220px; /* 强制和参数面板宽度一致 */
   border: 1px solid #f0f0f0; /* 强制和参数面板边框一致 */
-  top: 20px;
-  left: 20px;
   top: 20px;
   left: 20px;
 }
@@ -710,26 +703,10 @@ function handleCanvasContextMenu(e){
   display: block;
   border: none;
   outline: none;
-  /* background: #fff; */
-}
-
-#pixi-mount {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border: none;
-  outline: none;
 }
 
 /* 画布内容（可缩放、可拖动） */
 .canvas-content {
-  width: 100%;
-  height: 100%;
-  /* 3. 可选：加最小宽高，避免画布为空时看不见 */
-  /* min-width: 1800px; */
-  /* min-height: 1000px; */
-  
-  /* position: absolute;
   width: 100%;
   height: 100%;
   /* 3. 可选：加最小宽高，避免画布为空时看不见 */
@@ -774,7 +751,6 @@ function handleCanvasContextMenu(e){
 }
 
 /* Pixi挂载点：初始隐藏，后续接入时显示 */
-
 
 
 /* 底部页脚 */
