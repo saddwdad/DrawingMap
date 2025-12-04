@@ -1,6 +1,6 @@
 // src/stores/canvasStore.js
 import { defineStore } from 'pinia'
-import { markRaw } from 'vue';
+import { markRaw, render } from 'vue';
 import { useHistoryStore } from '@/History/History';
 
 export const useCanvasStore = defineStore('canvas', {
@@ -398,7 +398,7 @@ export const useCanvasStore = defineStore('canvas', {
         if (!this.renderer) return console.log("无渲染器")
         if (!Array.isArray(this.objects)) this.objects = []
 
-        // 图片场景（修复 redo 逻辑）
+        // 图片场景
       if (this.pendingType === 'picture' && this.pendingImageUrl) {
         console.log('DEBUG: A');
         const filters = this.currentFilters;
@@ -473,6 +473,7 @@ export const useCanvasStore = defineStore('canvas', {
         // 形状场景（修复 redo 逻辑）
         if (!this.pendingItem) return console.log("无预渲染")
         let shapeItem = this.pendingItem
+        shapeItem.type = this.pendingType;
         shapeItem = this.renderer.addToStage(shapeItem, x, y)
         console.log("对象是否在舞台中：", shapeItem.parent === this.renderer.stage)
         
@@ -496,7 +497,7 @@ export const useCanvasStore = defineStore('canvas', {
               }
               canvasThis.clearSelection()
               canvasThis.renderer.render && canvasThis.renderer.render()
-              canvasThis.cleanupObjects(); // 🚨 新增：执行清理
+              canvasThis.cleanupObjects(); // 执行清理
             },
             redo: () => {
               // 用闭包保存的 canvasThis 和 shapeType，避免 this 指向问题
@@ -509,7 +510,7 @@ export const useCanvasStore = defineStore('canvas', {
                 canvasThis.pendingItem = null;
                 canvasThis.renderer.render && canvasThis.renderer.render();
               }
-              canvasThis.cleanupObjects(); // 🚨 新增：执行清理
+              canvasThis.cleanupObjects(); // 执行清理
             }
         })
 
@@ -524,7 +525,6 @@ export const useCanvasStore = defineStore('canvas', {
     async renderImageAndRecord(x, y, imageUrl, filters, scale) {
         const historyStore = useHistoryStore(); 
         if (!this.renderer) return console.error("Renderer未初始化，无法渲染。");
-
         try {
             // 1. 异步渲染图片并添加到舞台 (等待 Promise 返回)
             const imageItem = await this.renderer.renderImage(x, y, imageUrl, { filters, scale });
@@ -533,7 +533,7 @@ export const useCanvasStore = defineStore('canvas', {
                 console.warn('图片对象创建失败或缺少ID，无法记录历史。');
                 return;
             }
-
+            imageItem.type = 'picture'
             // 2. 准备历史记录所需数据和闭包
             const canvasThis = this;
             const itemId = imageItem.id;
@@ -588,7 +588,7 @@ export const useCanvasStore = defineStore('canvas', {
 
 
       // 擦除入口：根据当前大小计算笔刷半径并委托渲染器删除命中的对象
-      eraseAt(x, y) {
+    eraseAt(x, y) {
         const historyStore = useHistoryStore() // 引入 historyStore
         if (!this.renderer) return
         const radius = Math.max(1, (this.currentSize || 20) / 2)
@@ -645,7 +645,7 @@ export const useCanvasStore = defineStore('canvas', {
               }
           })
         }
-      },
+    },
 
     // 清除画布
     clearCanvas() {
@@ -664,6 +664,70 @@ export const useCanvasStore = defineStore('canvas', {
       this.pendingImageUrl = null;
     },
 
+
+    //将序列化后数据重新加载，从indexDB中读取数据用
+    async reconstructItem(data) {
+      if(!this.renderer) return null
+
+      let newItem = null
+
+      if(data.type === 'picture' && data.imageUrl){
+        newItem = await this.renderer.renderImage(
+          data.x,
+          data.y,
+          data.imageUrl,
+          {
+            filters: data.filters,
+            scale: {x: data.scaleX, y: data.scaleY}
+          },
+          {
+            isLoad: true
+          }
+        )
+        if(newItem){
+          newItem.id =  data.id
+          newItem.type = data.type
+        }
+      }
+      else if(['rect', 'triangle', 'circle'].includes(data.type)){
+        let options = {
+          background: data.background,
+          'border-width': data.borderWidth,
+          'border-color': data.borderColor,
+        }
+        let displayObject = null
+        switch(data.type){
+          case 'rect':
+            displayObject = this.renderer.createRect(data.width, data.height, options)
+            break;
+          case 'circle':
+            displayObject = this.renderer.createCircle(data.radius, options)
+            break;
+          case 'triangle':
+            displayObject = this.renderer.createTriangle(data.size, options)
+            break;
+          case 'pen':
+            options = {
+              background: data.background,
+              'font-family': data['font-family'],
+              'font-size': data['font-size'],
+              color: data.color,
+              bold: data.bond,
+              italic: data.italic,
+              underline: data.underline,
+              lineThrough: data.lineThrough,
+            }
+            displayObject = this.renderer.createText(data.text, options)
+        }
+        newItem = this.renderer.addToStage(
+          displayObject,
+          data.x,
+          data.y
+        )
+      }
+      return newItem
+    },
+
     // 渲染图片
     renderImage(x, y, imageUrl, options = {}) {
       if (!this.renderer) return;
@@ -676,6 +740,7 @@ export const useCanvasStore = defineStore('canvas', {
       const scale = options.scale ?? this.currentImageScale ?? 1
       console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filterMode, scale })
       return this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale });
+      console.log(scale)
     },
 
     // 设置滤镜
