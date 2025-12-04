@@ -1,11 +1,17 @@
 // src/stores/canvasStore.js
 import { defineStore } from 'pinia'
+<<<<<<< HEAD
 import { markRaw } from 'vue';
 import { useHistoryStore } from '@/History/History';
 
 export const useCanvasStore = defineStore('canvas', {
   state: () => ({
     
+=======
+
+export const useCanvasStore = defineStore('canvas', {
+  state: () => ({
+>>>>>>> dev
     viewport: {
       x: 0,
       y: 0,
@@ -13,16 +19,24 @@ export const useCanvasStore = defineStore('canvas', {
     },
     isDragging: false, // 是否正在拖动内容
     dragStart: { x: 0, y: 0 },
+<<<<<<< HEAD
     dragRafId: null,
     lastDragDelta: { dx: 0, dy: 0 },
     bgColor: '#1a1a1a', // 内容背景色
     borderColor: '#333', // 内容边框色
     scalestep: 0.1,
     scaleLimits: { min: 0.1, max: 10 },
+=======
+    bgColor: '#1a1a1a', // 内容背景色
+    borderColor: '#333', // 内容边框色
+    scalestep: 0.1,
+    scaleLimits : {min: 0.1, max: 10},
+>>>>>>> dev
     minimap: {
       scale: 0.1,
       viewportSize: { width: 0, height: 0 }
     },
+<<<<<<< HEAD
     objects: [],
     // 渲染相关状态
     renderer: null,
@@ -194,6 +208,14 @@ export const useCanvasStore = defineStore('canvas', {
 },
 
     viewportTransform(state) {
+=======
+    
+    
+
+  }),
+  getters: {
+    viewportTransform(state){
+>>>>>>> dev
       return {
         x: state.viewport.x,
         y: state.viewport.y,
@@ -201,6 +223,7 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
+<<<<<<< HEAD
     scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
@@ -850,18 +873,95 @@ export const useCanvasStore = defineStore('canvas', {
       // 确保值在限制范围内
       const scale = Math.max(
         this.scaleLimits.min,
+=======
+    scalePercent(state){
+      return Math.round(state.viewport.scale*100)+'%'
+    }
+  },
+  actions: {
+    initViewportSize(width, height) {
+      this.minimap.viewportSize = { width, height }
+    },
+
+    startDrag(e) {
+      this.isDragging = true
+      this.dragStart = { x:e.clientX, y:e.clientY }
+    },
+
+
+
+    dragViewport(e) {
+      if(!this.isDragging) return
+      const dx = (e.clientX - this.dragStart.x) / this.viewport.scale
+      const dy = (e.clientY - this.dragStart.y) / this.viewport.scale
+      this.viewport.x -= dx
+      this.viewport.y -= dy
+      this.dragStart = {x:e.clientX, y:e.clientY}
+    },
+
+    endDrag(){
+      this.isDragging = false
+    },
+
+// src/stores/canvasStore.js actions
+// ...
+  scaleViewport(e, delta) {
+    e.preventDefault()
+    const newScale = Math.max(
+    this.scaleLimits.min, 
+    Math.min(this.scaleLimits.max, this.viewport.scale + delta)
+    )
+
+    if(newScale === this.viewport.scale) return
+
+    const rect = e.target.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left // 鼠标在容器内的X坐标
+    const mouseY = e.clientY - rect.top // 鼠标在容器内的Y坐标
+
+    // 容器中心点 (Stage的 position 坐标)
+    const centerX = this.minimap.viewportSize.width / 2 
+    const centerY = this.minimap.viewportSize.height / 2
+    
+    // 1. 计算鼠标相对于 Stage 中心点的偏移 (屏幕坐标)
+    const screenX = mouseX - centerX
+    const screenY = mouseY - centerY
+
+    // 2. 将屏幕偏移转换为 Pixi 世界坐标
+    const worldX = screenX / this.viewport.scale + this.viewport.x
+    const worldY = screenY / this.viewport.scale + this.viewport.y
+    
+    // 3. 更新缩放比例
+    this.viewport.scale = newScale
+
+    // 4. 应用新的缩放比例，计算新的视口坐标
+    // 新的视口 X = 鼠标的世界X - 鼠标的屏幕X / 新缩放
+    this.viewport.x = worldX - screenX / newScale
+    this.viewport.y = worldY - screenY / newScale
+
+
+},
+  setScale(newScale) {
+      // 确保值在限制范围内
+      const scale = Math.max(
+        this.scaleLimits.min, 
+>>>>>>> dev
         Math.min(this.scaleLimits.max, newScale)
       )
       this.viewport.scale = scale
     },
 
 
+<<<<<<< HEAD
     resetCanvas() {
+=======
+  resetCanvas(){
+>>>>>>> dev
       this.viewport.x = 0
       this.viewport.y = 0
       this.viewport.scale = 1
       this.isDragging = false
     },
+<<<<<<< HEAD
 
     // 将视口中心点设置为指定的世界坐标
     centerViewportOn(x, y) {
@@ -900,6 +1000,8 @@ export const useCanvasStore = defineStore('canvas', {
           console.log(`已从 objects 数组中清理了 ${cleanedCount} 个无效对象。`);
         }
     },
+=======
+>>>>>>> dev
   },
 
   persist: {

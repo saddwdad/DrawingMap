@@ -192,39 +192,9 @@
 
 <script setup>
 
+// 后续逻辑占位：引入Pinia仓库
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
-  const canvasStore = useCanvasStore()
-
-// 应用参数（当前实现中参数是实时生效的，此按钮可用于未来扩展）
-const applyParams = () => {
-  // 目前参数是实时生效的，此方法可用于未来需要批量应用参数的场景
-  console.log('参数已应用')
-}
-
-// 重置参数
-const resetParams = () => {
-  canvasStore.setCurrentColor('#42b983')
-  canvasStore.setCurrentSize(100)
-  canvasStore.setCurrentBorderWidth(2)
-  canvasStore.setCurrentBorderColor('#333')
-  canvasStore.setCurrentOpacity(1)
-  canvasStore.resetTextProperties()
-  canvasStore.setCurrentImageScale(1)
-  canvasStore.setCurrentImageFilter('none')
-}
-
-const onImageFileChange = (event) => {
-  const file = event.target.files && event.target.files[0]
-  if (!file) return
-  if (!file.type || !file.type.startsWith('image/')) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const imageUrl = e.target?.result
-    if (imageUrl) canvasStore.setCurrentImageUrl(imageUrl)
-  }
-  reader.readAsDataURL(file)
-  event.target.value = ''
-}
+const canvasStore = useCanvasStore()
 </script>
 
 <style scoped>
