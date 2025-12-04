@@ -4,7 +4,7 @@ import { useHistoryStore } from '@/History/History';
 
 export const useCanvasStore = defineStore('canvas', {
   state: () => ({
-    
+
     viewport: {
       x: 0,
       y: 0,
@@ -60,137 +60,137 @@ export const useCanvasStore = defineStore('canvas', {
 
     // canvasStore.js 的 worldBounds 计算属性（修改关键部分）
     worldBounds: (state) => {
-        // 🔴 第 0 层防护：直接捕获所有异常，避免组件崩溃
-        try {
-          const renderer = state.renderer;
-          
-          // 第 1 层防护：所有核心依赖的严格校验（包括是否为对象）
-          if (!renderer || typeof renderer !== 'object' ||
-              !state.viewport || typeof state.viewport !== 'object' ||
-              !state.minimap || typeof state.minimap !== 'object' ||
-              state.viewport.x === undefined || state.viewport.y === undefined) {
-            return { minX: 0, maxX: 800, minY: 0, maxY: 600, width: 800, height: 600 };
-          }
+      // 🔴 第 0 层防护：直接捕获所有异常，避免组件崩溃
+      try {
+        const renderer = state.renderer;
 
-          // 第 2 层防护：viewport 完全兜底（强制转为有效数字）
-          const viewport = {
-            x: typeof state.viewport.x === 'number' && !isNaN(state.viewport.x) ? state.viewport.x : 0,
-            y: typeof state.viewport.y === 'number' && !isNaN(state.viewport.y) ? state.viewport.y : 0,
-            scale: typeof state.viewport.scale === 'number' && !isNaN(state.viewport.scale) && state.viewport.scale > 0 ? state.viewport.scale : 1
-          };
-          const minimap = state.minimap;
-          const viewportScale = viewport.scale;
-          const viewportSize = (typeof minimap.viewportSize === 'object' && minimap.viewportSize);
-          const viewportW = viewportSize.width / viewportScale;
-          const viewportH = viewportSize.height / viewportScale;
-
-          // 🔴 第 3 层防护：renderer.objects 完全兜底（确保是数组，再过滤）
-          const objects = Array.isArray(state.objects) ? state.objects : [];
-          // 最严格的有效对象过滤：排除所有非对象/无效属性
-          const validObjects = objects.filter(obj => {
-            return obj !== null && obj !== undefined && // 非空
-                  typeof obj === 'object' && obj.constructor !== undefined && // 是有效对象
-                  typeof obj.x === 'number' && !isNaN(obj.x) && // x 是有效数字
-                  typeof obj.y === 'number' && !isNaN(obj.y); // y 是有效数字
-          });
-
-          // 无有效对象时的边界
-          if (validObjects.length === 0) {
-            return {
-              minX: viewport.x - viewportW,
-              maxX: viewport.x + viewportW,
-              minY: viewport.y - viewportH,
-              maxY: viewport.y + viewportH,
-              width: viewportW * 2,
-              height: viewportH * 2
-            };
-          }
-
-          // 🔴 第 4 层防护：遍历前初始化默认边界，遍历中再添对象级兜底
-          let minX = viewport.x - viewportW / 2;
-          let maxX = viewport.x + viewportW / 2;
-          let minY = viewport.y - viewportH / 2;
-          let maxY = viewport.y + viewportH / 2;
-
-          validObjects.forEach(obj => {
-            // 双重保险：再次校验 obj（避免极端情况）
-            if (!obj || typeof obj !== 'object' || typeof obj.x !== 'number' || typeof obj.y !== 'number') {
-              return;
-            }
-
-            const shape = typeof obj._shape === 'object' ? obj._shape : {};
-            const objX = obj.x;
-            const objY = obj.y;
-            let objMinX, objMaxX, objMinY, objMaxY;
-
-            const shapeType = shape.type || obj.constructor?.name || 'default';
-
-            // 每种形状的边界计算都添默认值
-            switch (shapeType) {
-              case 'rect':
-                const rectW = typeof shape.width === 'number' && shape.width > 0 ? shape.width : 100;
-                const rectH = typeof shape.height === 'number' && shape.height > 0 ? shape.height : 100;
-                objMinX = objX - rectW / 2;
-                objMaxX = objX + rectW / 2;
-                objMinY = objY - rectH / 2;
-                objMaxY = objY + rectH / 2;
-                break;
-              case 'circle':
-                const radius = typeof shape.radius === 'number' && shape.radius > 0 ? shape.radius : 50;
-                objMinX = objX - radius;
-                objMaxX = objX + radius;
-                objMinY = objY - radius;
-                objMaxY = objY + radius;
-                break;
-              case 'triangle':
-                const size = typeof shape.size === 'number' && shape.size > 0 ? shape.size : 100;
-                objMinX = objX - size / 2;
-                objMaxX = objX + size / 2;
-                objMinY = objY - size / 2;
-                objMaxY = objY + size / 2;
-                break;
-              case 'text':
-              case 'Sprite':
-              default:
-                objMinX = objX - 20;
-                objMaxX = objX + 20;
-                objMinY = objY - 20;
-                objMaxY = objY + 20;
-                break;
-            }
-
-            // 确保边界值有效
-            objMinX = typeof objMinX === 'number' && !isNaN(objMinX) ? objMinX : objX - 50;
-            objMaxX = typeof objMaxX === 'number' && !isNaN(objMaxX) ? objMaxX : objX + 50;
-            objMinY = typeof objMinY === 'number' && !isNaN(objMinY) ? objMinY : objY - 50;
-            objMaxY = typeof objMaxY === 'number' && !isNaN(objMaxY) ? objMaxY : objY + 50;
-
-            // 更新全局边界
-            minX = Math.min(minX, objMinX);
-            maxX = Math.max(maxX, objMaxX);
-            minY = Math.min(minY, objMinY);
-            maxY = Math.max(maxY, objMaxY);
-          });
-
-          // 扩展边界
-          const paddingX = (maxX - minX) * 0.2;
-          const paddingY = (maxY - minY) * 0.2;
-          minX -= paddingX;
-          maxX += paddingX;
-          minY -= paddingY;
-          maxY += paddingY;
-
-          return {
-            minX, maxX, minY, maxY,
-            width: maxX - minX,
-            height: maxY - minY
-          };
-        } catch (err) {
-          // 🔴 终极兜底：任何异常都返回默认边界，避免组件崩溃
-          console.warn('worldBounds 计算异常，返回默认边界：', err);
+        // 第 1 层防护：所有核心依赖的严格校验（包括是否为对象）
+        if (!renderer || typeof renderer !== 'object' ||
+          !state.viewport || typeof state.viewport !== 'object' ||
+          !state.minimap || typeof state.minimap !== 'object' ||
+          state.viewport.x === undefined || state.viewport.y === undefined) {
           return { minX: 0, maxX: 800, minY: 0, maxY: 600, width: 800, height: 600 };
         }
-},
+
+        // 第 2 层防护：viewport 完全兜底（强制转为有效数字）
+        const viewport = {
+          x: typeof state.viewport.x === 'number' && !isNaN(state.viewport.x) ? state.viewport.x : 0,
+          y: typeof state.viewport.y === 'number' && !isNaN(state.viewport.y) ? state.viewport.y : 0,
+          scale: typeof state.viewport.scale === 'number' && !isNaN(state.viewport.scale) && state.viewport.scale > 0 ? state.viewport.scale : 1
+        };
+        const minimap = state.minimap;
+        const viewportScale = viewport.scale;
+        const viewportSize = (typeof minimap.viewportSize === 'object' && minimap.viewportSize);
+        const viewportW = viewportSize.width / viewportScale;
+        const viewportH = viewportSize.height / viewportScale;
+
+        // 🔴 第 3 层防护：renderer.objects 完全兜底（确保是数组，再过滤）
+        const objects = Array.isArray(state.objects) ? state.objects : [];
+        // 最严格的有效对象过滤：排除所有非对象/无效属性
+        const validObjects = objects.filter(obj => {
+          return obj !== null && obj !== undefined && // 非空
+            typeof obj === 'object' && obj.constructor !== undefined && // 是有效对象
+            typeof obj.x === 'number' && !isNaN(obj.x) && // x 是有效数字
+            typeof obj.y === 'number' && !isNaN(obj.y); // y 是有效数字
+        });
+
+        // 无有效对象时的边界
+        if (validObjects.length === 0) {
+          return {
+            minX: viewport.x - viewportW,
+            maxX: viewport.x + viewportW,
+            minY: viewport.y - viewportH,
+            maxY: viewport.y + viewportH,
+            width: viewportW * 2,
+            height: viewportH * 2
+          };
+        }
+
+        // 🔴 第 4 层防护：遍历前初始化默认边界，遍历中再添对象级兜底
+        let minX = viewport.x - viewportW / 2;
+        let maxX = viewport.x + viewportW / 2;
+        let minY = viewport.y - viewportH / 2;
+        let maxY = viewport.y + viewportH / 2;
+
+        validObjects.forEach(obj => {
+          // 双重保险：再次校验 obj（避免极端情况）
+          if (!obj || typeof obj !== 'object' || typeof obj.x !== 'number' || typeof obj.y !== 'number') {
+            return;
+          }
+
+          const shape = typeof obj._shape === 'object' ? obj._shape : {};
+          const objX = obj.x;
+          const objY = obj.y;
+          let objMinX, objMaxX, objMinY, objMaxY;
+
+          const shapeType = shape.type || obj.constructor?.name || 'default';
+
+          // 每种形状的边界计算都添默认值
+          switch (shapeType) {
+            case 'rect':
+              const rectW = typeof shape.width === 'number' && shape.width > 0 ? shape.width : 100;
+              const rectH = typeof shape.height === 'number' && shape.height > 0 ? shape.height : 100;
+              objMinX = objX - rectW / 2;
+              objMaxX = objX + rectW / 2;
+              objMinY = objY - rectH / 2;
+              objMaxY = objY + rectH / 2;
+              break;
+            case 'circle':
+              const radius = typeof shape.radius === 'number' && shape.radius > 0 ? shape.radius : 50;
+              objMinX = objX - radius;
+              objMaxX = objX + radius;
+              objMinY = objY - radius;
+              objMaxY = objY + radius;
+              break;
+            case 'triangle':
+              const size = typeof shape.size === 'number' && shape.size > 0 ? shape.size : 100;
+              objMinX = objX - size / 2;
+              objMaxX = objX + size / 2;
+              objMinY = objY - size / 2;
+              objMaxY = objY + size / 2;
+              break;
+            case 'text':
+            case 'Sprite':
+            default:
+              objMinX = objX - 20;
+              objMaxX = objX + 20;
+              objMinY = objY - 20;
+              objMaxY = objY + 20;
+              break;
+          }
+
+          // 确保边界值有效
+          objMinX = typeof objMinX === 'number' && !isNaN(objMinX) ? objMinX : objX - 50;
+          objMaxX = typeof objMaxX === 'number' && !isNaN(objMaxX) ? objMaxX : objX + 50;
+          objMinY = typeof objMinY === 'number' && !isNaN(objMinY) ? objMinY : objY - 50;
+          objMaxY = typeof objMaxY === 'number' && !isNaN(objMaxY) ? objMaxY : objY + 50;
+
+          // 更新全局边界
+          minX = Math.min(minX, objMinX);
+          maxX = Math.max(maxX, objMaxX);
+          minY = Math.min(minY, objMinY);
+          maxY = Math.max(maxY, objMaxY);
+        });
+
+        // 扩展边界
+        const paddingX = (maxX - minX) * 0.2;
+        const paddingY = (maxY - minY) * 0.2;
+        minX -= paddingX;
+        maxX += paddingX;
+        minY -= paddingY;
+        maxY += paddingY;
+
+        return {
+          minX, maxX, minY, maxY,
+          width: maxX - minX,
+          height: maxY - minY
+        };
+      } catch (err) {
+        // 🔴 终极兜底：任何异常都返回默认边界，避免组件崩溃
+        console.warn('worldBounds 计算异常，返回默认边界：', err);
+        return { minX: 0, maxX: 800, minY: 0, maxY: 600, width: 800, height: 600 };
+      }
+    },
 
     viewportTransform(state) {
       return {
@@ -204,7 +204,7 @@ export const useCanvasStore = defineStore('canvas', {
   },
   actions: {
     // 设置渲染器
-    
+
     centerViewportOnWorldCoords(worldX, worldY) {
       this.viewport.x = worldX
       this.viewport.y = worldY
@@ -377,116 +377,116 @@ export const useCanvasStore = defineStore('canvas', {
       this.pendingType = 'pen'
     },
 
-    preparePendingImage(imageUrl) {
-      if (!this.renderer) return
-      this.pendingImageUrl = imageUrl
-      this.pendingType = 'picture'
-      // // 创建临时预览图片
-      // this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
-      //   .then(sprite => {
-      //     if (sprite) {
-      //       this.pendingItem = sprite
-      //       // 将预览图片添加到舞台
-      //       this.renderer.stage.addChild(sprite)
-      //     }
-      //   })
-    },
+    // preparePendingImage(imageUrl) {
+    //   if (!this.renderer) return
+    //   this.pendingImageUrl = imageUrl
+    //   this.pendingType = 'picture'
+    //   // // 创建临时预览图片
+    //   // this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
+    //   //   .then(sprite => {
+    //   //     if (sprite) {
+    //   //       this.pendingItem = sprite
+    //   //       // 将预览图片添加到舞台
+    //   //       this.renderer.stage.addChild(sprite)
+    //   //     }
+    //   //   })
+    // },
 
     finalizePending(x, y) {
-        const historyStore = useHistoryStore()
-        if (!this.renderer) return console.log("无渲染器")
-        if (!Array.isArray(this.objects)) this.objects = []
+      const historyStore = useHistoryStore()
+      if (!this.renderer) return console.log("无渲染器")
+      if (!Array.isArray(this.objects)) this.objects = []
 
-        // 图片场景（修复 redo 逻辑）
-        if (this.pendingType === 'picture' && this.pendingImageUrl) {
-          const filters = this.currentFilters
-          const imageUrl = this.pendingImageUrl
-          console.log("final渲染照片")
-          const imageItem = this.renderer.renderImage(x, y, imageUrl, { filters })
-          if(!imageItem) return 
-          
-          // 保存 canvasStore 的 this 和必要参数（闭包传递）
-          const canvasThis = this;
-          const renderX = x;
-          const renderY = y;
-          const imgFilters = filters;
+      // 图片场景（修复 redo 逻辑）
+      if (this.pendingType === 'picture' && this.pendingImageUrl) {
+        const filters = this.currentFilters
+        const imageUrl = this.pendingImageUrl
+        console.log("final渲染照片")
+        const imageItem = this.renderer.renderImage(x, y, imageUrl, { filters })
+        if (!imageItem) return
 
-          historyStore.recordAction({
-              type: 'add_picture',
-              undo: () => {
-                const target = canvasThis.objects.find(obj => obj === imageItem)
-                if (target) {
-                  if (target.parent) target.parent.removeChild(target)
-                  target.destroy({ children: true })
-                }
-                canvasThis.objects = canvasThis.objects.filter(obj => obj !== imageItem && obj !== null && obj !== undefined)
-                canvasThis.clearSelection()
-                canvasThis.renderer.render && canvasThis.renderer.render()
-              },
-              redo: () => {
-                // 用闭包保存的参数，避免 this 指向问题
-                const newImage = canvasThis.renderer.renderImage(renderX, renderY, imageUrl, { filters: imgFilters })
-                if (newImage && newImage.x !== undefined && newImage.y !== undefined) {
-                  canvasThis.renderer.addToStage(newImage, renderX, renderY)
-                  canvasThis.objects.push(newImage)
-                  canvasThis.renderer.render && canvasThis.renderer.render()
-                }
-              }
-            })
-          
-          this.pendingImageUrl = null
-          this.pendingType = null
-          if (imageItem) this.objects.push(imageItem)
-          return
-        }
-
-        // 形状场景（修复 redo 逻辑）
-        if (!this.pendingItem) return console.log("无预渲染")
-        let shapeItem = this.pendingItem
-        shapeItem = this.renderer.addToStage(shapeItem, x, y)
-        console.log("对象是否在舞台中：", shapeItem.parent === this.renderer.stage)
-        
         // 保存 canvasStore 的 this 和必要参数（闭包传递）
         const canvasThis = this;
         const renderX = x;
         const renderY = y;
-        const shapeType = this.pendingType; // 存储当前形状类型
+        const imgFilters = filters;
 
         historyStore.recordAction({
-            type: `add_${shapeType}`,
-            shapeType: shapeType, // 存入 action（冗余备份）
-            undo: () => {
-              const target = canvasThis.objects.find(obj => obj === shapeItem)
-              if (target) {
-                if (target.parent) target.parent.removeChild(target)
-                target.destroy({ children: true })
-              }
-              canvasThis.objects = canvasThis.objects.filter(obj => obj !== shapeItem && obj !== null && obj !== undefined)
-              canvasThis.clearSelection()
-              canvasThis.renderer.render && canvasThis.renderer.render()
-            },
-            redo: () => {
-              // 用闭包保存的 canvasThis 和 shapeType，避免 this 指向问题
-              canvasThis.pendingType = shapeType;
-              canvasThis.preparePending(shapeType);
-              const newShape = canvasThis.pendingItem;
-              
-              if (newShape && newShape.x !== undefined && newShape.y !== undefined) {
-                canvasThis.renderer.addToStage(newShape, renderX, renderY);
-                canvasThis.objects.push(newShape);
-                canvasThis.pendingItem = null;
-                canvasThis.renderer.render && canvasThis.renderer.render();
-              }
+          type: 'add_picture',
+          undo: () => {
+            const target = canvasThis.objects.find(obj => obj === imageItem)
+            if (target) {
+              if (target.parent) target.parent.removeChild(target)
+              target.destroy({ children: true })
             }
+            canvasThis.objects = canvasThis.objects.filter(obj => obj !== imageItem && obj !== null && obj !== undefined)
+            canvasThis.clearSelection()
+            canvasThis.renderer.render && canvasThis.renderer.render()
+          },
+          redo: () => {
+            // 用闭包保存的参数，避免 this 指向问题
+            const newImage = canvasThis.renderer.renderImage(renderX, renderY, imageUrl, { filters: imgFilters })
+            if (newImage && newImage.x !== undefined && newImage.y !== undefined) {
+              canvasThis.renderer.addToStage(newImage, renderX, renderY)
+              canvasThis.objects.push(newImage)
+              canvasThis.renderer.render && canvasThis.renderer.render()
+            }
+          }
         })
 
-        this.pendingItem = null
+        this.pendingImageUrl = null
         this.pendingType = null
-        if (shapeItem) this.objects.push(shapeItem)
-        if (this.currentTool === 'rect' || this.currentTool === 'circle' || this.currentTool === 'triangle') {
-          this.preparePending(this.currentTool)
+        if (imageItem) this.objects.push(imageItem)
+        return
+      }
+
+      // 形状场景（修复 redo 逻辑）
+      if (!this.pendingItem) return console.log("无预渲染")
+      let shapeItem = this.pendingItem
+      shapeItem = this.renderer.addToStage(shapeItem, x, y)
+      console.log("对象是否在舞台中：", shapeItem.parent === this.renderer.stage)
+
+      // 保存 canvasStore 的 this 和必要参数（闭包传递）
+      const canvasThis = this;
+      const renderX = x;
+      const renderY = y;
+      const shapeType = this.pendingType; // 存储当前形状类型
+
+      historyStore.recordAction({
+        type: `add_${shapeType}`,
+        shapeType: shapeType, // 存入 action（冗余备份）
+        undo: () => {
+          const target = canvasThis.objects.find(obj => obj === shapeItem)
+          if (target) {
+            if (target.parent) target.parent.removeChild(target)
+            target.destroy({ children: true })
+          }
+          canvasThis.objects = canvasThis.objects.filter(obj => obj !== shapeItem && obj !== null && obj !== undefined)
+          canvasThis.clearSelection()
+          canvasThis.renderer.render && canvasThis.renderer.render()
+        },
+        redo: () => {
+          // 用闭包保存的 canvasThis 和 shapeType，避免 this 指向问题
+          canvasThis.pendingType = shapeType;
+          canvasThis.preparePending(shapeType);
+          const newShape = canvasThis.pendingItem;
+
+          if (newShape && newShape.x !== undefined && newShape.y !== undefined) {
+            canvasThis.renderer.addToStage(newShape, renderX, renderY);
+            canvasThis.objects.push(newShape);
+            canvasThis.pendingItem = null;
+            canvasThis.renderer.render && canvasThis.renderer.render();
+          }
         }
-      },
+      })
+
+      this.pendingItem = null
+      this.pendingType = null
+      if (shapeItem) this.objects.push(shapeItem)
+      if (this.currentTool === 'rect' || this.currentTool === 'circle' || this.currentTool === 'triangle') {
+        this.preparePending(this.currentTool)
+      }
+    },
 
     // 擦除入口：根据当前大小计算笔刷半径并委托渲染器删除命中的对象
     eraseAt(x, y) {
@@ -523,7 +523,8 @@ export const useCanvasStore = defineStore('canvas', {
       const filterMode = options.filters || this.currentImageFilter || 'none'
       const scale = options.scale ?? this.currentImageScale ?? 1
       console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filterMode, scale })
-      return this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale });
+      this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale })
+      return;
     },
 
     // 设置滤镜
@@ -564,27 +565,27 @@ export const useCanvasStore = defineStore('canvas', {
       this.currentFilters = { grayscale: false, blur: 0, brightness: 1 };
     },
 
-    // 渲染文本
-    renderText(x, y, text, options = {}) {
-      if (!this.renderer) return;
+    // // 渲染文本
+    // renderText(x, y, text, options = {}) {
+    //   if (!this.renderer) return;
 
-      // 不需要考虑画布当前的偏移量，因为stage的pivot会处理画布的偏移
-      // 直接使用相对于stage中心的坐标绘制文本
-      console.log('使用的坐标:', { x, y });
+    //   // 不需要考虑画布当前的偏移量，因为stage的pivot会处理画布的偏移
+    //   // 直接使用相对于stage中心的坐标绘制文本
+    //   console.log('使用的坐标:', { x, y });
 
-      const textOptions = {
-        'font-family': options.fontFamily || this.currentFontFamily,
-        'font-size': options.fontSize || this.currentFontSize,
-        color: options.color || this.currentTextColor,
-        background: options.background || this.currentTextBackground,
-        bold: options.bold || this.currentBold,
-        italic: options.italic || this.currentItalic,
-        underline: options.underline || this.currentUnderline,
-        lineThrough: options.lineThrough || this.currentLineThrough
-      };
+    //   const textOptions = {
+    //     'font-family': options.fontFamily || this.currentFontFamily,
+    //     'font-size': options.fontSize || this.currentFontSize,
+    //     color: options.color || this.currentTextColor,
+    //     background: options.background || this.currentTextBackground,
+    //     bold: options.bold || this.currentBold,
+    //     italic: options.italic || this.currentItalic,
+    //     underline: options.underline || this.currentUnderline,
+    //     lineThrough: options.lineThrough || this.currentLineThrough
+    //   };
 
-      return this.renderer.renderText(x, y, text, textOptions);
-    },
+    //   return this.renderer.renderText(x, y, text, textOptions);
+    // },
 
     // 屏幕坐标转世界坐标：将鼠标在屏幕上的坐标转换为画布世界坐标
     screenToWorld(mouseX, mouseY) {

@@ -76,7 +76,7 @@ const handleToolClick = (toolType, e) => {
     canvasStore.preparePending(toolType)
   } else if (toolType === 'pen') {
     // 文本工具：使用参数面板中的文本内容，不再弹窗
-    canvasStore.preparePendingText(canvasStore.currentTextContent)
+    // canvasStore.preparePendingText(canvasStore.currentTextContent)
   }
 }
 </script>

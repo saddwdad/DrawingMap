@@ -110,11 +110,11 @@ export class Renderer {
     })
   }
 
-  // 渲染富文本
-  renderText(x, y, text, options = {}) {
-    const textObj = this.createText(text, options)
-    return this.addToStage(textObj, x, y)
-  }
+  // // 渲染富文本
+  // renderText(x, y, text, options = {}) {
+  //   const textObj = this.createText(text, options)
+  //   return this.addToStage(textObj, x, y)
+  // }
 
   // 应用滤镜
   applyFilters(mode) {
@@ -222,66 +222,66 @@ export class Renderer {
   }
 
   // 创建精灵对象：用于渲染图片
-  createSprite(imageUrl, options = {}) {
-    console.log('Renderer.createSprite', { imageUrlLength: imageUrl?.length, options })
-    const texture = PIXI.Texture.from(imageUrl)
-    const sprite = new PIXI.Sprite(texture)
-    if (options.filters) {
-      const f = this.applyFilters(options.filters)
-      if (f && f.length) {
-        sprite.filters = f
-      } else if (typeof options.filters === 'string') {
-        if (options.filters === 'warm') sprite.tint = 0xffcc99
-        else if (options.filters === 'cool') sprite.tint = 0x99ccff
-        else if (options.filters === 'green') sprite.tint = 0x66ff66
-      }
-    }
-    if (typeof options.scale === 'number' && options.scale > 0) {
-      try { sprite.scale.set(options.scale) } catch { }
-    }
-    sprite.anchor.set(0.5)
-    return sprite
-  }
+  // createSprite(imageUrl, options = {}) {
+  //   console.log('Renderer.createSprite', { imageUrlLength: imageUrl?.length, options })
+  //   const texture = PIXI.Texture.from(imageUrl)
+  //   const sprite = new PIXI.Sprite(texture)
+  //   if (options.filters) {
+  //     const f = this.applyFilters(options.filters)
+  //     if (f && f.length) {
+  //       sprite.filters = f
+  //     } else if (typeof options.filters === 'string') {
+  //       if (options.filters === 'warm') sprite.tint = 0xffcc99
+  //       else if (options.filters === 'cool') sprite.tint = 0x99ccff
+  //       else if (options.filters === 'green') sprite.tint = 0x66ff66
+  //     }
+  //   }
+  //   if (typeof options.scale === 'number' && options.scale > 0) {
+  //     try { sprite.scale.set(options.scale) } catch { }
+  //   }
+  //   sprite.anchor.set(0.5)
+  //   return sprite
+  // }
 
-  // 异步创建精灵对象：支持图片加载和自动缩放处理
-  createSpriteAsync(imageUrl, options = {}) {
-    return new Promise(resolve => {
-      try {
-        const img = new Image()
-        img.onload = () => {
-          const limit = 4096
-          const w = img.naturalWidth || img.width
-          const h = img.naturalHeight || img.height
-          const maxSide = Math.max(w, h)
-          if (maxSide > limit) {
-            const scale = limit / maxSide
-            const cw = Math.round(w * scale)
-            const ch = Math.round(h * scale)
-            const canvas = document.createElement('canvas')
-            canvas.width = cw
-            canvas.height = ch
-            const ctx = canvas.getContext('2d')
-            ctx.drawImage(img, 0, 0, cw, ch)
-            const scaledUrl = canvas.toDataURL()
-            const sprite = this.createSprite(scaledUrl, options)
-            resolve(sprite)
-          } else {
-            const sprite = this.createSprite(imageUrl, options)
-            resolve(sprite)
-          }
-        }
-        img.onerror = () => resolve(null)
-        img.src = imageUrl
-      } catch {
-        try {
-          const sprite = this.createSprite(imageUrl, options)
-          resolve(sprite)
-        } catch {
-          resolve(null)
-        }
-      }
-    })
-  }
+  // // 异步创建精灵对象：支持图片加载和自动缩放处理
+  // createSpriteAsync(imageUrl, options = {}) {
+  //   return new Promise(resolve => {
+  //     try {
+  //       const img = new Image()
+  //       img.onload = () => {
+  //         const limit = 4096
+  //         const w = img.naturalWidth || img.width
+  //         const h = img.naturalHeight || img.height
+  //         const maxSide = Math.max(w, h)
+  //         if (maxSide > limit) {
+  //           const scale = limit / maxSide
+  //           const cw = Math.round(w * scale)
+  //           const ch = Math.round(h * scale)
+  //           const canvas = document.createElement('canvas')
+  //           canvas.width = cw
+  //           canvas.height = ch
+  //           const ctx = canvas.getContext('2d')
+  //           ctx.drawImage(img, 0, 0, cw, ch)
+  //           const scaledUrl = canvas.toDataURL()
+  //           const sprite = this.createSprite(scaledUrl, options)
+  //           resolve(sprite)
+  //         } else {
+  //           const sprite = this.createSprite(imageUrl, options)
+  //           resolve(sprite)
+  //         }
+  //       }
+  //       img.onerror = () => resolve(null)
+  //       img.src = imageUrl
+  //     } catch {
+  //       try {
+  //         const sprite = this.createSprite(imageUrl, options)
+  //         resolve(sprite)
+  //       } catch {
+  //         resolve(null)
+  //       }
+  //     }
+  //   })
+  // }
 
   // 将图形对象添加到舞台并设置位置
   addToStage(display, x, y) {
