@@ -81,6 +81,8 @@ export class Renderer {
         try {
           const texture = PIXI.Texture.from(img)
           const sprite = new PIXI.Sprite(texture)
+          sprite.imageUrl = imageUrl
+          sprite.rawFilters = options.filters || 'none'
           if (options.filters) {
             const f = this.applyFilters(options.filters)
             if (f && f.length) {
@@ -91,8 +93,22 @@ export class Renderer {
               else if (options.filters === 'green') sprite.tint = 0x66ff66
             }
           }
-          if (typeof options.scale === 'number' && options.scale > 0) {
-            try { sprite.scale.set(options.scale) } catch { }
+          const scaleOption = options.scale;
+          
+          if (typeof scaleOption === 'object' && scaleOption !== null) {
+              if (typeof scaleOption.x === 'number' && typeof scaleOption.y === 'number') {
+                  try { 
+                      
+                      sprite.scale.set(scaleOption.x, scaleOption.y) 
+                  } catch { }
+              }
+          } 
+          
+          else if (typeof scaleOption === 'number' && scaleOption > 0) {
+              try { 
+                  
+                  sprite.scale.set(scaleOption) 
+              } catch { }
           }
           sprite.anchor.set(0.5)
           const result = this.addToStage(sprite, x, y)
@@ -161,7 +177,9 @@ export class Renderer {
     if (strokeStyle) g.stroke(strokeStyle)
     // 记录几何与样式，便于后续更新
     g._shape = { type: 'rect', width, height }
-    g._style = { background: options.background || null, borderWidth: options['border-width'] || 0, borderColor: options['border-color'] || null }
+    g._style = { background: options.background || null, 
+                 borderWidth: options['border-width'] || 0, 
+                 borderColor: options['border-color'] || null }
     return g
   }
 
@@ -178,7 +196,9 @@ export class Renderer {
     if (strokeStyle) g.stroke(strokeStyle)
     // 记录几何与样式，便于后续更新
     g._shape = { type: 'circle', radius }
-    g._style = { background: options.background || null, borderWidth: options['border-width'] || 0, borderColor: options['border-color'] || null }
+    g._style = { background: options.background || null, 
+                 borderWidth: options['border-width'] || 0, 
+                 borderColor: options['border-color'] || null }
     return g
   }
 
@@ -198,7 +218,9 @@ export class Renderer {
     if (strokeStyle) g.stroke(strokeStyle)
     // 记录几何与样式，便于后续更新
     g._shape = { type: 'triangle', size }
-    g._style = { background: options.background || null, borderWidth: options['border-width'] || 0, borderColor: options['border-color'] || null }
+    g._style = { background: options.background || null, 
+                 borderWidth: options['border-width'] || 0, 
+                 borderColor: options['border-color'] || null }
     return g
   }
 

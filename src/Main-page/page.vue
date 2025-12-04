@@ -10,7 +10,12 @@
         </div>
         <!-- 右侧功能按钮 -->
         <div class="header-right">
-          <a-button type="default" shape="round" :icon="createVNode(SaveOutlined)">保存</a-button>
+          <a-button 
+          type="default" 
+          shape="round" 
+          :icon="createVNode(SaveOutlined)"
+          @click = "saveToIndexDB()"
+          >保存</a-button>
           <a-button type="default" shape="round" :icon="createVNode(ShareAltOutlined)" style="margin-left: 8px;">分享</a-button>
         </div>
       </div>
@@ -69,6 +74,7 @@
 </template>
 
 <script setup>
+
 import { defineComponent, h, createVNode, computed, watch, ref, onMounted, onUnmounted, nextTick} from 'vue'
 import { storeToRefs } from 'pinia'
 import { FontAwesomeIcon  } from '@fortawesome/vue-fontawesome'
@@ -88,8 +94,9 @@ import { Renderer } from '@/renderer/Renderer'
 import { useContextMenuStore } from './contextMenu/contextMenu'
 import contextMenu from './contextMenu/contextMenu.vue'
 import { context } from 'ant-design-vue/es/vc-image/src/PreviewGroup'
-
-
+//引入持久化存储
+import { CanvasCache } from '@/LocalStorage/localCache'
+import { message } from 'ant-design-vue'
 
 
 const canvasContainerRef = ref(null)
@@ -105,9 +112,15 @@ let minimapApp = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
 const contextMenuStore = useContextMenuStore()
+const canvasCache = CanvasCache
 const { 
 
     minimap:minimapConfig,
+    canvasStyle, 
+    scalePercent, 
+    minimapViewportStyle,
+    viewport,
+
 
 } = storeToRefs(canvasStore)
 
@@ -456,13 +469,60 @@ const handleScale = (e) => {
   canvasStore.scaleViewport(e, delta)
 }
 
+const saveToIndexDB = async() => {
+  const dataToCache = {
+    objects: objects.value
+  }
+  const success = await CanvasCache.save(dataToCache);
+  if(success){
+    message.success('画布元素成功保存')
+  }
+  else{
+    message.error('画布元素保存失败')
+  }
+}
+
+
+const loadFromIndexDB = async() => {
+  const renderer = canvasStore.renderer
+  if (!renderer) {
+    message.error("渲染器未初始化，无法加载缓存。");
+    return;
+  }
+  
+
+
+  renderer.stage.removeChildren(); 
+  canvasStore.objects = [];
+  const reconstructedObjects = await canvasCache.get(canvasStore)
+
+  if(reconstructedObjects && reconstructedObjects.length > 0){
+    
+    if(renderer){
+      reconstructedObjects.forEach(obj => {
+        
+        canvasStore.objects.push(obj)
+        renderer.stage.addChild(obj)
+        
+      });
+
+
+      renderer.render && renderer.render();
+    }
+    message.info(`已成功从缓存中恢复 ${reconstructedObjects.length} 个画布元素。`);
+  }
+  else{
+    message.info('本地缓存中没有找到画布数据，开始新的会话。')
+  }
+}
+
 
 watch(canvasStore.viewport, updatePixiViewport, { deep: true })
 
 // 组件生命周期
 onMounted(async () => {
   await initPixi()
-  
+  await loadFromIndexDB()
   // 使用 ResizeObserver 监听容器大小变化，确保布局准确
   if (canvasContainerRef.value) {
     resizeObserver = new ResizeObserver(() => {
@@ -513,18 +573,6 @@ onUnmounted(() => {
   document.removeEventListener('triggerFileInput', triggerFileInput);
 
 })
-
-
-const { 
-    canvasStyle, 
-    scalePercent, 
-    minimapViewportStyle,
-    viewport
-} = storeToRefs(canvasStore)
-
-
-
-
 
 
 
