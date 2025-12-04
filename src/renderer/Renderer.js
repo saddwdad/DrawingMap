@@ -445,7 +445,10 @@ export class Renderer {
       if (props.underline !== undefined) s.underline = !!props.underline
       if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough
     }
-    display._style = next
+    // 只有非文本元素才更新_style属性
+    if (shape.type !== 'text') {
+      display._style = next
+    }
     if (props.opacity !== undefined) display.alpha = props.opacity
   }
 
