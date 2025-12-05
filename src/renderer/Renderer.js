@@ -11,6 +11,17 @@ export class Renderer {
     this.miniMap = null;
     this.miniMapContent = null; // 新增：小地图内容容器引用
     this.mainViewport = { x: 0, y: 0, width: 800, height: 600 };
+    
+    // 框选功能相关变量
+    this.isSelecting = false; // 是否正在进行框选
+    this.selectStart = { x: 0, y: 0 }; // 框选起始坐标
+    this.selectEnd = { x: 0, y: 0 }; // 框选结束坐标
+    this.selectBox = null; // 框选区域图形对象
+    
+    // 多选功能相关变量
+    this.selectedObjects = []; // 当前选中的元素列表
+    this.isDraggingGroup = false; // 是否正在进行组拖动
+    this.dragOffset = { x: 0, y: 0 }; // 组拖动时的偏移量
   }
 
   initMiniMap(miniMapStage, miniMapWidth = 200, miniMapHeight = 150, miniMapScale = 0.1) {
@@ -254,6 +265,280 @@ export class Renderer {
     })
   }
 
+  // 初始化画布的鼠标事件监听器（用于框选功能）
+  initCanvasEvents(appStage) {
+    // 存储当前渲染器引用，用于事件处理函数
+    const renderer = this;
+    this.appStage = appStage; // 保存app.stage的引用
+    
+        // 确保app.stage能够接收事件
+    appStage.eventMode = 'static';
+    appStage.cursor = 'default';
+    appStage.hitArea = new PIXI.Rectangle(0, 0, 10000, 10000); // 设置较大的点击区域
+    
+    console.log('Canvas event listeners initialized on app.stage:', {
+      appStageEventMode: appStage.eventMode,
+      appStageCursor: appStage.cursor,
+      appStageChildrenCount: appStage.children.length,
+      appStageHitArea: appStage.hitArea
+    });
+    
+    // 调试：检查Pixi事件系统是否正常工作
+    console.log('Pixi事件系统调试信息:', {
+      hasEventSystem: !!PIXI.EventSystem,
+      hasFederatedEvents: !!PIXI.FederatedEvent,
+      appStage: appStage,
+      appStageParent: appStage.parent
+    });
+    
+    // 鼠标按下事件 - 开始框选或组拖动
+    appStage.on('pointerdown', (e) => {
+
+       
+        console.log('App.stage pointerdown event:', {
+        target: e.target === appStage ? 'appStage' : e.target?.constructor?.name,
+        globalPos: e.global,
+        isSelecting: renderer.isSelecting,
+        eventType: e.type,
+        button: e.button
+      });
+      
+      // 修改：允许在任何地方点击开始框选，而不仅限于空白区域
+      console.log('Starting selection (modified: allow selection anywhere)');
+      
+      // 点击画布空白区域，清除之前的选择
+      renderer.clearSelection();
+      
+      renderer.isSelecting = true;
+      const globalPos = e.global;
+      renderer.selectStart = { x: globalPos.x, y: globalPos.y };
+      renderer.selectEnd = { x: globalPos.x, y: globalPos.y };
+      
+      console.log('Starting selection:', {
+        isSelecting: renderer.isSelecting,
+        selectStart: renderer.selectStart,
+        target: e.target === appStage ? 'appStage' : e.target?.constructor?.name
+      });
+      
+      // 创建框选区域图形对象
+      if (!renderer.selectBox) {
+        renderer.selectBox = new PIXI.Graphics();
+        renderer.selectBox.eventMode = 'none'; // 设置为none，避免干扰stage的事件处理
+        // 将框选区域添加到app.stage而不是内部stage，确保可见
+        appStage.addChild(renderer.selectBox);
+        console.log('Select box created and added to app.stage, children count:', appStage.children.length);
+      }
+      
+      // 更新框选区域显示
+      renderer.updateSelectBox();
+    });
+    
+    // 鼠标移动事件 - 更新框选区域
+ appStage.on('pointermove', (e) => {
+      if (renderer.isSelecting) {
+        console.log('App.stage pointermove event during selection:', { globalPos: e.global });
+        
+        const globalPos = e.global;
+        renderer.selectEnd = { x: globalPos.x, y: globalPos.y };
+        console.log('Updating selection box:', {
+          selectStart: renderer.selectStart,
+          selectEnd: renderer.selectEnd
+        });
+        renderer.updateSelectBox();
+      }
+    });
+    
+    // 鼠标释放事件 - 完成框选
+     appStage.on('pointerup', (e) => {
+      console.log('App.stage pointerup event, isSelecting:', renderer.isSelecting);
+      if (renderer.isSelecting) {
+        renderer.isSelecting = false;
+        
+        console.log('Performing selection...');
+        // 执行选择逻辑
+        renderer.performSelection();
+        
+        // 移除框选区域
+        if (renderer.selectBox && renderer.selectBox.parent) {
+          // 从app.stage中移除框选区域，而不是内部stage
+          appStage.removeChild(renderer.selectBox);
+          console.log('Select box removed from app.stage, remaining children:', appStage.children.length);
+        }
+        renderer.selectBox = null;
+      }
+    });
+    
+    // 鼠标在画布外释放事件
+    appStage.on('pointerupoutside', (e) => {
+      console.log('App.stage pointerupoutside event, isSelecting:', renderer.isSelecting);
+      if (renderer.isSelecting) {
+       renderer.isSelecting = false;
+        
+        console.log('Performing selection (outside)...');
+        // 执行选择逻辑
+        renderer.performSelection();
+        
+        // 移除框选区域
+        if (renderer.selectBox && renderer.selectBox.parent) {
+          // 从app.stage中移除框选区域，而不是内部stage
+          appStage.removeChild(renderer.selectBox);
+          console.log('Select box removed from app.stage (outside), remaining children:', appStage.children.length);
+        }
+        renderer.selectBox = null;
+      }
+    });
+  }
+  
+  // 更新框选区域的显示
+  updateSelectBox() {
+    if (!this.selectBox) {
+      console.error('updateSelectBox called but selectBox is null');
+      return;
+    }
+    
+    // 计算框选区域的边界（使用DOM坐标）
+    const x1 = Math.min(this.selectStart.x, this.selectEnd.x);
+    const y1 = Math.min(this.selectStart.y, this.selectEnd.y);
+    const x2 = Math.max(this.selectStart.x, this.selectEnd.x);
+    const y2 = Math.max(this.selectStart.y, this.selectEnd.y);
+    
+    // 计算框选区域的宽度和高度
+    const width = x2 - x1;
+    const height = y2 - y1;
+    
+    console.log('UpdateSelectBox with  global coordinates:', {
+       globalstart: { x: x1, y: y1 },
+       globalend: { x: x2, y: y2 },
+      width, height
+    });
+    
+    // 清除并重新绘制框选区域（使用DOM坐标）
+    this.selectBox.clear();
+    
+    // 使用正确的Pixi Graphics绘制方法
+    this.selectBox.beginFill(0x0099ff, 0.2); // 半透明蓝色填充
+    this.selectBox.lineStyle(1, 0x0099ff); // 蓝色边框
+    this.selectBox.drawRect(x1, y1, width, height);
+    this.selectBox.endFill();
+    
+    console.log('Select box rendered at:', { x: x1, y: y1, width, height });
+  }
+  
+  // 执行框选逻辑，选择区域内的所有元素
+  performSelection() {
+    // 计算框选区域的边界（使用DOM坐标）
+    const x1 = Math.min(this.selectStart.x, this.selectEnd.x);
+    const y1 = Math.min(this.selectStart.y, this.selectEnd.y);
+    const x2 = Math.max(this.selectStart.x, this.selectEnd.x);
+    const y2 = Math.max(this.selectStart.y, this.selectEnd.y);
+    
+    console.log('Performing selection with DOM bounds:', {
+      x1, y1, x2, y2,
+      objectsCount: this.objects.length
+    });
+    
+    // 清除之前的选中状态
+    this.clearSelection();
+    
+    // 检查每个元素是否在框选区域内
+    this.objects.forEach(obj => {
+      try {
+        // 获取元素的全局边界
+        const globalBounds = obj.getBounds(true); // true 表示获取全局边界
+        
+        console.log('Checking object:', {
+          type: obj.constructor.name,
+          globalBounds,
+          isInSelection: globalBounds.x + globalBounds.width >= x1 && globalBounds.x <= x2 && 
+                        globalBounds.y + globalBounds.height >= y1 && globalBounds.y <= y2
+        });
+        
+        // 检查元素是否与框选区域相交
+        if (globalBounds.x + globalBounds.width >= x1 && globalBounds.x <= x2 && 
+            globalBounds.y + globalBounds.height >= y1 && globalBounds.y <= y2) {
+          this.selectedObjects.push(obj);
+          console.log('Object selected:', obj.constructor.name);
+        }
+      } catch (error) {
+        console.error('获取元素边界时出错:', error);
+      }
+    });
+    
+    console.log('Selection completed:', {
+      selectedObjectsCount: this.selectedObjects.length
+    });
+    
+    // 为选中的元素添加视觉反馈
+    this.highlightSelectedObjects();
+    
+    // 通知外部选中了这些元素
+    if (typeof this.onSelect === 'function' && this.selectedObjects.length > 0) {
+      this.onSelect(this.selectedObjects[0], this.selectedObjects);
+    }
+  }
+  
+  // 清除所有选中状态
+  clearSelection() {
+    // 移除所有选中元素的视觉反馈
+    this.selectedObjects.forEach(obj => {
+      this.removeHighlight(obj);
+    });
+    
+    // 清空选中元素列表
+    this.selectedObjects = [];
+  }
+  
+  // 为选中的元素添加视觉反馈
+  highlightSelectedObjects() {
+    this.selectedObjects.forEach(obj => {
+      // 为元素添加选中高亮效果
+      if (!obj._highlight) {
+        obj._highlight = new PIXI.Graphics();
+        // 将高亮边框添加到app.stage而不是内部stage，确保正确显示
+        this.appStage.addChild(obj._highlight);
+      }
+      
+      try {
+        // 获取元素的全局边界
+        const globalBounds = obj.getBounds(true);
+        const padding = 5;
+        
+        // 清除并重新绘制高亮边框
+        obj._highlight.clear();
+        obj._highlight.lineStyle(2, 0x00ff00, 1); // 绿色边框
+        
+        // 使用全局坐标绘制高亮边框
+        obj._highlight.drawRoundedRect(
+          globalBounds.x - padding,
+          globalBounds.y - padding,
+          globalBounds.width + padding * 2,
+          globalBounds.height + padding * 2,
+          5
+        );
+        
+        console.log('Highlight added:', {
+          type: obj.constructor.name,
+          globalBounds,
+          highlightPosition: { x: globalBounds.x - padding, y: globalBounds.y - padding }
+        });
+      } catch (error) {
+        console.error('添加高亮效果时出错:', error);
+      }
+    });
+  }
+  
+  // 移除元素的视觉反馈
+  removeHighlight(obj) {
+    if (obj._highlight) {
+      // 从stage中移除高亮边框
+      if (obj._highlight.parent) {
+        obj._highlight.parent.removeChild(obj._highlight);
+      }
+      obj._highlight.destroy();
+      obj._highlight = null;
+    }
+  }
+  
   // 将图形对象添加到舞台并设置位置
   addToStage(display, x, y) {
     console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
@@ -280,28 +565,92 @@ export class Renderer {
         offsetY: 0
       };
       
-      // 鼠标按下事件 - 开始拖动
+      // 获取canvas元素
+      const canvas = this.appStage?.parent?.canvas || document.querySelector('canvas');
+      
+      if (!canvas) {
+        console.error('Canvas element not found for element drag event binding');
+        return;
+      }
+      
+      // 鼠标按下事件 - 开始拖动或组拖动
       display.on('pointerdown', (e) => {
         e.stopPropagation(); // 阻止事件冒泡，避免影响画布拖动
         
-        // 点击选中对象
+        // 点击选中对象（如果不是多选状态，则清除之前的选择）
         if (typeof renderer.onSelect === 'function') {
           renderer.onSelect(display);
         }
         
-        // 开始拖动
-        dragState.isDragging = true;
-        
-        // 计算鼠标相对于元素位置的偏移量
-        const localPos = display.toLocal(e.global);
-        dragState.offsetX = localPos.x;
-        dragState.offsetY = localPos.y;
+        // 检查是否在多选状态下
+        if (renderer.selectedObjects.length > 1 && renderer.selectedObjects.includes(display)) {
+          // 开始组拖动
+          renderer.isDraggingGroup = true;
+          
+          // 计算鼠标相对于元素位置的偏移量
+          const localPos = display.toLocal(e.global);
+          renderer.dragOffset.x = localPos.x;
+          renderer.dragOffset.y = localPos.y;
+        } else {
+          // 单选拖动
+          // 开始拖动
+          dragState.isDragging = true;
+          
+          // 计算鼠标相对于元素位置的偏移量
+          const localPos = display.toLocal(e.global);
+          dragState.offsetX = localPos.x;
+          dragState.offsetY = localPos.y;
+        }
         
         display.cursor = 'grabbing';
       });
       
-      // 鼠标移动事件 - 拖动元素
+      // 鼠标移动事件 - 拖动元素或组
       display.on('pointermove', (e) => {
+        // 处理组拖动
+        if (renderer.isDraggingGroup) {
+          e.stopPropagation(); // 阻止事件冒泡
+          
+          // 计算新位置
+          const globalPos = e.global;
+          const stagePos = renderer.stage.toLocal(globalPos);
+          
+          // 计算移动距离
+          const deltaX = stagePos.x - renderer.dragOffset.x;
+          const deltaY = stagePos.y - renderer.dragOffset.y;
+          
+          // 检查是否有选中的对象
+          if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
+            console.warn('No selected objects for group dragging');
+            return;
+          }
+          
+          // 移动选中的第一个元素到新位置
+          const firstObj = renderer.selectedObjects[0];
+          if (!firstObj || !firstObj.position) {
+            console.warn('Invalid first object for group dragging');
+            return;
+          }
+          
+          const firstDeltaX = deltaX - firstObj.position.x;
+          const firstDeltaY = deltaY - firstObj.position.y;
+          
+          // 移动所有选中的元素
+          renderer.selectedObjects.forEach(obj => {
+            if (obj && obj.position) {
+              obj.position.x += firstDeltaX;
+              obj.position.y += firstDeltaY;
+            }
+          });
+          
+          // 更新小地图
+          if (renderer.miniMapContent) {
+            renderer.renderMiniMap();
+          }
+          return;
+        }
+        
+        // 处理单选拖动
         if (!dragState.isDragging) return;
         
         e.stopPropagation(); // 阻止事件冒泡
@@ -319,18 +668,32 @@ export class Renderer {
       
       // 鼠标抬起事件 - 结束拖动
       display.on('pointerup', () => {
+        // 结束组拖动
+        if (renderer.isDraggingGroup) {
+          renderer.isDraggingGroup = false;
+        }
+        
+        // 结束单选拖动
         if (dragState.isDragging) {
           dragState.isDragging = false;
-          display.cursor = 'pointer';
         }
+        
+        display.cursor = 'pointer';
       });
       
       // 鼠标移出元素事件 - 结束拖动
       display.on('pointerupoutside', () => {
+        // 结束组拖动
+        if (renderer.isDraggingGroup) {
+          renderer.isDraggingGroup = false;
+        }
+        
+        // 结束单选拖动
         if (dragState.isDragging) {
           dragState.isDragging = false;
-          display.cursor = 'pointer';
         }
+        
+        display.cursor = 'pointer';
       });
       
     } catch (error) {
