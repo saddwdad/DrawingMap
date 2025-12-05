@@ -375,102 +375,25 @@ export const useCanvasStore = defineStore('canvas', {
       }
       // 使用参数面板的文本内容作为默认输入
       this.pendingItem = this.renderer.createText(text || this.currentTextContent || '', textOptions)
-      this.pendingType = 'pen'
+      this.pendingType = 'text'
     },
 
     preparePendingImage(imageUrl) {
       if (!this.renderer) return
       this.pendingImageUrl = imageUrl
       this.pendingType = 'picture'
-      // // 创建临时预览图片
-      // this.renderer.createSpriteAsync(imageUrl, { filters: this.currentFilters })
-      //   .then(sprite => {
-      //     if (sprite) {
-      //       this.pendingItem = sprite
-      //       // 将预览图片添加到舞台
-      //       this.renderer.stage.addChild(sprite)
-      //     }
-      //   })
     },
-    //渲染图象到舞台
+
+
+    //渲染形状到舞台
     async finalizePending(x, y) {
         const historyStore = useHistoryStore()
         if (!this.renderer) return console.log("无渲染器")
         if (!Array.isArray(this.objects)) this.objects = []
 
-        // 图片场景
-      if (this.pendingType === 'picture' && this.pendingImageUrl) {
-        console.log('DEBUG: A');
-        const filters = this.currentFilters;
-        console.log('DEBUG: B');
-        const imageUrl = this.pendingImageUrl;
-        console.log('DEBUG: A');
-        
-        this.pendingImageUrl = null;
-        this.pendingType = null;
-        
-        console.log(`canvasStore.js:593 renderImage {x: ${x}, y: ${y}, ...}`);
-        
-        try {
-            // ⭐ 核心修复：使用 await 强制等待图片对象创建完成
-            const imageItem = await this.renderer.renderImage(x, y, imageUrl, { filters });
 
-            if (!imageItem) {
-                console.warn('图片对象创建失败，取消记录历史。');
-                return;
-            }
 
-            // 1. 将对象添加到 Store 的 objects 数组
-            // this.objects.push(imageItem);
-            
-            const canvasThis = this; // 捕获 this 引用
-            const itemId = imageItem.id
-            if (itemId === undefined || itemId === null) {
-             console.error("致命错误：Renderer.js未成功分配ID或imageItem代理已崩溃。");
-             return; // 不记录历史
-        }
-            const rawFilters = filters ? JSON.parse(JSON.stringify(filters)) : {};
-            const creationX = x;
-            const creationY = y;
-            const findObjectById = (id) => canvasThis.objects.find(obj => obj.id === id);
-            const imageAction = markRaw({
-            type: 'add_picture',
-            imageUrl, 
-            filters: rawFilters,
-            creationX,
-            creationY,
-            // 闭包内部直接使用 imageItem，它是一个响应式代理
-            undo: () => {
-                // 撤销逻辑：通过 ID 查找并移除
-                const target = findObjectById(itemId);
-                if (target) {
-                      if (target.parent) target.parent.removeChild(target); 
-                      // 移除逻辑改为按 ID 过滤
-                      canvasThis.objects = canvasThis.objects.filter(obj => obj.id !== itemId);
-                      if (canvasThis.renderer && canvasThis.renderer.objects) {
-                          canvasThis.renderer.objects = canvasThis.renderer.objects.filter(obj => obj.id !== itemId);
-                      }
-                }
-                canvasThis.clearSelection();
-            },
-            redo: async () => {
-              if (!findObjectById(itemId)) {
-                      // 调用 renderer 的异步方法重新渲染，这会自动将其推入 this.objects
-                  await canvasThis.renderer.renderImage(creationX, creationY, imageUrl, { filters: rawFilters });                  }
-                }
-            });
-            historyStore.recordAction( imageAction );
-            console.log(`History.js: 成功记录 add_picture 动作到 undoStack。`); // 新增确认日志
-
-        } catch (error) {
-            console.error('图片加载或渲染失败:', error);
-        }
-        
-        // 🚨 关键：如果是 async 函数，无需 return
-        return; 
-    }
-
-        // 形状场景（修复 redo 逻辑）
+        // 形状场景
         if (!this.pendingItem) return console.log("无预渲染")
         let shapeItem = this.pendingItem
         shapeItem.type = this.pendingType;
@@ -689,7 +612,7 @@ export const useCanvasStore = defineStore('canvas', {
           newItem.type = data.type
         }
       }
-      else if(['rect', 'triangle', 'circle'].includes(data.type)){
+      else if(['rect', 'triangle', 'circle', 'text'].includes(data.type)){
         let options = {
           background: data.background,
           'border-width': data.borderWidth,
@@ -706,14 +629,14 @@ export const useCanvasStore = defineStore('canvas', {
           case 'triangle':
             displayObject = this.renderer.createTriangle(data.size, options)
             break;
-          case 'pen':
+          case 'text':
             options = {
               background: data.background,
-              'font-family': data['font-family'],
-              'font-size': data['font-size'],
-              color: data.color,
-              bold: data.bond,
-              italic: data.italic,
+              'font-family': data.fontFamily,
+              'font-size': data.fontSize,
+              color: data.fill,
+              bold: data.fontWeight === 'bold',
+              italic: data.fontStyle === 'italic',
               underline: data.underline,
               lineThrough: data.lineThrough,
             }
