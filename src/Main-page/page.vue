@@ -97,7 +97,7 @@ import { context } from 'ant-design-vue/es/vc-image/src/PreviewGroup'
 //引入持久化存储
 import { CanvasCache } from '@/LocalStorage/localCache'
 import { message } from 'ant-design-vue'
-
+import { useHistoryStore } from '@/History/History'
 
 const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)
@@ -112,6 +112,7 @@ let minimapApp = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
 const contextMenuStore = useContextMenuStore()
+const historyStore = useHistoryStore()
 const canvasCache = CanvasCache
 const { 
 
@@ -516,6 +517,32 @@ const loadFromIndexDB = async() => {
   }
 }
 
+function handleKeyDown(event) {
+        // 检查是否按下 Ctrl 键 (兼容 Mac 上的 Command/Meta 键)
+        const isCtrlKey = event.ctrlKey || event.metaKey; 
+        
+        // 避免在输入框中触发快捷键
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            return;
+        }
+
+        if (isCtrlKey && event.key === 'z') {
+            // 阻止浏览器默认行为 (如浏览器历史记录的后退/前进)
+            event.preventDefault(); 
+            
+            if (event.altKey) {
+                if (historyStore.canRedo) {
+                    console.log("执行 Redo (Ctrl+Shift+Z)");
+                    historyStore.redo(); 
+                }
+            } else {
+                if (historyStore.canUndo) {
+                    console.log("执行 Undo (Ctrl+Z)");
+                    historyStore.undo(); 
+                }
+            }
+        }
+}
 
 watch(canvasStore.viewport, updatePixiViewport, { deep: true })
 
@@ -540,7 +567,7 @@ onMounted(async () => {
   
   // 监听图片工具点击事件
   document.addEventListener('triggerFileInput', triggerFileInput);
-
+  document.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
@@ -571,6 +598,7 @@ onUnmounted(() => {
   minimapApp = null
   // 移除图片工具事件监听器
   document.removeEventListener('triggerFileInput', triggerFileInput);
+  document.removeEventListener('keydown', handleKeyDown)
 
 })
 

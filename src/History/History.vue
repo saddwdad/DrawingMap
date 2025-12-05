@@ -17,7 +17,7 @@
       :class="{ disabled: !historyStore.canRedo }"
       @click="handleRedo" 
     >
-      重做 (Ctrl+Shift+Z)
+      重做 (Ctrl+Alt+Z)
     </div>
     <!-- 清空历史 -->
     <div class="menu-divider"></div>
@@ -34,6 +34,7 @@
 <script setup>
 import { useHistoryStore } from '@/History/History'
 import { useContextMenuStore } from '@/Main-page/contextMenu/contextMenu'
+import { onMounted, onUnmounted } from 'vue'
 
 const historyStore = useHistoryStore()
 const contextMenuStore = useContextMenuStore()
@@ -72,6 +73,7 @@ const handleClearHistory = () => {
   historyStore.clearHistory()
   contextMenuStore.hideMenu()
 }
+
 </script>
 
 <style>

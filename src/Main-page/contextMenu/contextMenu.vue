@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useContextMenuStore } from '@/Main-page/contextMenu/contextMenu'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 
@@ -42,6 +42,8 @@ const handleDeleteSelected = () => {
     contextMenuStore.hideMenu();
   }
 }
+
+
 
 // 单独处理清空画布
 const handleClearCanvas = () => {
