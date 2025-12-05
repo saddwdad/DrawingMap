@@ -19,7 +19,7 @@ const canvasStorage = localForage.createInstance({
  * @param {Array<PIXI.DisplayObject>} pixiObjects - Pixi 元素的数组
  * @returns {Array<Object>} 序列化后的数据数组
  */
-  const serializePixiObjects = (pixiObjects) => {
+  export const serializePixiObjects = (pixiObjects) => {
           if (!pixiObjects || !Array.isArray(pixiObjects)) return [];
           
           return pixiObjects.map(obj => {
