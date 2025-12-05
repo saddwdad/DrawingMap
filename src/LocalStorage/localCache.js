@@ -66,14 +66,14 @@ const canvasStorage = localForage.createInstance({
                   }
                   else if(itemType === 'text'){
                     serialized.text = obj.text;
-                    serialized.fontFamily = obj.fontFamily
-                    serialized.fontSize = obj.fontSize
-                    serialized.fill = obj.fill
-                    serialized.backgroundColor = obj.backgroundColor
-                    serialized.fontWeight = obj.fontWeight
-                    serialized.fontStyle = obj.fontStyle
-                    serialized.underline = obj.underline
-                    serialized.lineThrough = obj.lineThrough
+                    serialized.fontFamily = obj.style.fontFamily
+                    serialized.fontSize = obj.style.fontSize
+                    serialized.fill = obj.style.fill
+                    serialized.backgroundColor = obj.style.backgroundColor
+                    serialized.fontWeight = obj.style.fontWeight
+                    serialized.fontStyle = obj.style.fontStyle
+                    serialized.underline = obj.style.underline
+                    serialized.lineThrough = obj.style.lineThrough
                   }
                   
               
