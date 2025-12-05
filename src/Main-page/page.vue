@@ -161,6 +161,24 @@ const initPixi = async () => {
     autoDensity: true
   }
 )
+  
+  // 手动启用Pixi事件系统
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
+  
+  // 确保Pixi应用的事件系统已启用
+  if (app.renderer.events) {
+    app.renderer.events.domElement = pixiMountRef.value;
+  }
+  
+  // 调试：检查Pixi事件系统是否启用
+  console.log('Pixi事件系统状态:', {
+    stageEventMode: app.stage.eventMode,
+    stageHitArea: app.stage.hitArea,
+    appRenderer: !!app.renderer,
+    appScreen: app.screen,
+    hasEventsSystem: !!app.renderer.events
+  });
   // 2. 创建根容器（作为视角容器，所有内容都放在这个容器里）
   stage = new PIXI.Container()
   app.stage.addChild(stage)
@@ -178,6 +196,8 @@ const initPixi = async () => {
 
   // 5. 初始化渲染器并设置到store，直接使用stage作为绘制容器
   renderer = new Renderer(stage);
+  // 初始化画布事件监听器（用于框选功能），传入app.stage作为参数
+  renderer.initCanvasEvents(app.stage);
   canvasStore.setRenderer(renderer);
 
   await nextTick()
@@ -190,6 +210,7 @@ const initPixi = async () => {
   // 6. 添加鼠标点击事件处理
   // 使用更可靠的方式：直接在canvas元素上绑定点击事件
   const canvas = pixiMountRef.value;
+  // 为canvas添加点击事件监听器，但选择工具时让Pixi处理
   canvas.addEventListener('click', handleCanvasClick);
 
   // 7. 初始化工具栏和浮动参数面板的拖动
@@ -219,12 +240,15 @@ const initPixi = async () => {
 
 // 处理画布点击事件
 const handleCanvasClick = (event) => {
-  // 阻止事件冒泡，避免与画布拖动事件冲突
-  event.stopPropagation();
-  
   // 获取当前工具
   const currentTool = canvasStore.currentTool;
   console.log('handleCanvasClick触发，当前工具:', currentTool);
+  
+  // 选择工具：完全跳过点击处理，让Pixi的框选功能正常工作
+  if (currentTool === 'select') {
+    console.log('选择工具激活，跳过DOM点击处理，让Pixi框选功能执行');
+    return; // 直接返回，不执行任何操作
+  }
   
   // 获取画布容器的实际尺寸
   const rect = pixiMountRef.value.getBoundingClientRect();
@@ -242,13 +266,10 @@ const handleCanvasClick = (event) => {
     console.log("开始渲染照片")
     canvasStore.finalizePending(x, y)
   }
-  // if (canvasStore.currentTool === 'picture'){
-  //   canvasStore.finalizePending(x, y)
-  // }
-  // 选择工具：仅用于点击对象选中，不在画布空白处执行绘制
-  if (currentTool === 'select') {
-    return
-  }
+  
+  // 对于其他工具，阻止事件冒泡，避免与画布拖动事件冲突
+  event.stopPropagation();
+  
   if (currentTool === 'pen') {
     // 文本工具：使用面板文本内容直接放置
     canvasStore.preparePendingText(canvasStore.currentTextContent)
@@ -260,6 +281,12 @@ const handleCanvasClick = (event) => {
 
 // 处理鼠标按下事件 - 区分左键和右键
 const handleMouseDown = (e) => {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select') {
+    console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
+    return;
+  }
+  
   // 右键按下（按钮值为2）时，开始拖动画布
   if (e.button === 2) {
     // 阻止默认右键菜单
@@ -281,6 +308,12 @@ const handleMouseDown = (e) => {
 // 处理鼠标移动事件
   let dragDebounceTimer = null;
   const handleMouseMove = (e) => {
+    // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+    if (canvasStore.currentTool === 'select') {
+      console.log('选择工具激活，跳过DOM mousemove处理，让Pixi框选功能执行');
+      return;
+    }
+    
     clearTimeout(dragDebounceTimer);
   dragDebounceTimer = setTimeout(() =>{
     if (canvasStore.isDragging) {
@@ -310,6 +343,12 @@ const handleMouseDown = (e) => {
 
 // 处理鼠标释放事件
 const handleMouseUp = (e) => {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select') {
+    console.log('选择工具激活，跳过DOM mouseup处理，让Pixi框选功能执行');
+    return;
+  }
+  
   endDrag(e);
   // 结束擦除
   isErasing.value = false
@@ -317,6 +356,12 @@ const handleMouseUp = (e) => {
 
 // 处理鼠标离开事件
 const handleMouseLeave = (e) => {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select') {
+    console.log('选择工具激活，跳过DOM mouseleave处理，让Pixi框选功能执行');
+    return;
+  }
+  
   endDrag(e);
   // 离开画布时结束擦除
   isErasing.value = false
