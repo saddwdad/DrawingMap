@@ -2,7 +2,8 @@
 import { defineStore } from 'pinia'
 import { markRaw, render } from 'vue';
 import { useHistoryStore } from '@/History/History';
-
+import { serializePixiObjects } from '@/LocalStorage/localCache';
+import { text } from '@fortawesome/fontawesome-svg-core';
 export const useCanvasStore = defineStore('canvas', {
   state: () => ({
     
@@ -384,9 +385,10 @@ export const useCanvasStore = defineStore('canvas', {
       this.pendingType = 'picture'
     },
 
-
+    
     //渲染形状到舞台
     async finalizePending(x, y) {
+        
         const historyStore = useHistoryStore()
         if (!this.renderer) return console.log("无渲染器")
         if (!Array.isArray(this.objects)) this.objects = []
@@ -396,8 +398,13 @@ export const useCanvasStore = defineStore('canvas', {
         // 形状场景
         if (!this.pendingItem) return console.log("无预渲染")
         let shapeItem = this.pendingItem
+        const itemRef = { current: shapeItem }
         shapeItem.type = this.pendingType;
+        
         shapeItem = this.renderer.addToStage(shapeItem, x, y)
+        const [originalData] = serializePixiObjects([shapeItem]);
+        // originalData.x = x
+        // originalData.y = y
         console.log("对象是否在舞台中：", shapeItem.parent === this.renderer.stage)
         
         // 保存 canvasStore 的 this 和必要参数（闭包传递）
@@ -408,31 +415,75 @@ export const useCanvasStore = defineStore('canvas', {
 
         historyStore.recordAction({
             type: `add_${shapeType}`,
-            shapeType: shapeType, // 存入 action（冗余备份）
+            originalData: originalData,
+
+            shapeType: shapeType, 
             undo: () => {
-              const target = canvasThis.objects.find(obj => obj === shapeItem)
+              const itemToRemove = itemRef.current
+              const target = canvasThis.objects.find(obj => obj === itemToRemove)
               if (target) {
                 if (target.parent) target.parent.removeChild(target)
               }
-              canvasThis.objects = canvasThis.objects.filter(obj => obj !== shapeItem && obj !== null && obj !== undefined)
+              canvasThis.objects = canvasThis.objects.filter(obj => obj !== itemToRemove && obj !== null && obj !== undefined)
               if (canvasThis.renderer && canvasThis.renderer.objects) {
-              canvasThis.renderer.objects = canvasThis.renderer.objects.filter(obj => obj !== shapeItem);
+              canvasThis.renderer.objects = canvasThis.renderer.objects.filter(obj => obj !== itemToRemove);
               }
               canvasThis.clearSelection()
               canvasThis.renderer.render && canvasThis.renderer.render()
               canvasThis.cleanupObjects(); // 执行清理
             },
-            redo: () => {
+            // 在 canvasStore.js 的 finalizePending action 内部
+
+
+            redo: async () => {
+              
               // 用闭包保存的 canvasThis 和 shapeType，避免 this 指向问题
               canvasThis.pendingType = shapeType;
-              canvasThis.preparePending(shapeType);
-              const newShape = canvasThis.pendingItem;
-              
+              switch(shapeType){
+                case 'rect':
+                case 'circle':
+                case 'triangle':
+                  canvasThis.preparePending(shapeType)
+                  break;
+                case 'text':
+                  const textContent = originalData.text
+                  canvasThis.preparePendingText(textContent)
+                  break;
+              }
+              const newShape = canvasThis.pendingItem
+              itemRef.current = newShape
               if (newShape && newShape.x !== undefined && newShape.y !== undefined) {
                 canvasThis.renderer.addToStage(newShape, renderX, renderY);
+                canvasThis.objects.push(newShape);
                 canvasThis.pendingItem = null;
                 canvasThis.renderer.render && canvasThis.renderer.render();
               }
+            //   const recreatedObjects = await canvasThis.reconstructItem(originalData)
+
+            //   if(recreatedObjects){
+            //     canvasThis.objects.push(recreatedObjects)
+                
+            //     if(recreatedObjects.position){
+            //       recreatedObjects.position.set(originalData.x, originalData.y)
+            //       const stage = canvasThis.renderer.stage;
+            //       if (stage && stage.updateTransform) {
+            //     // 【核心修复】强制 Stage 的 World Transform 立即生效
+            //     // 这次我们不直接调用 updateTransform，而是调用 updateTransform() 的包装函数（如果有）。
+            //     // 如果没有，直接调用 updateTransform 是可以接受的，但需要确保 Stage 是健康的。
+            //     // 鉴于您之前 updateTransform 失败，我们相信渲染器能在 render 时处理。
+                
+            //     // 针对您的问题，最常见的解决方案是确保父级和祖父级的缓存被清除：
+            //       if (recreatedObjects.parent && recreatedObjects.parent.parent) {
+            //           // 假设父级的父级是 Viewport/World 容器，强制更新它
+            //           // 这相当于手动触发了缩放操作中的 World 矩阵更新
+            //           recreatedObjects.parent.parent.updateTransform(); 
+            //       }
+            //    }
+            //   }
+            // canvasThis.renderer.render && canvasThis.renderer.render();
+
+            // }
+
               canvasThis.cleanupObjects(); // 执行清理
             }
         })
@@ -459,20 +510,19 @@ export const useCanvasStore = defineStore('canvas', {
             imageItem.type = 'picture'
             // 2. 准备历史记录所需数据和闭包
             const canvasThis = this;
-            const itemId = imageItem.id;
+            
             // 注意：这里必须深拷贝 filters，以防后续修改影响历史记录
             const rawFilters = filters ? JSON.parse(JSON.stringify(filters)) : {};
             const creationX = x;
             const creationY = y;
             const currentScale = scale; // 捕获当前的 scale
-
+            const itemRef = { current: imageItem }
             // 查找对象的辅助函数 (依赖于对象是否在 canvasStore.objects 中)
             const findObjectById = (id) => canvasThis.objects.find(obj => obj.id === id);
 
             // 3. 记录历史动作
             const imageAction = markRaw({
                 type: 'add_picture',
-                itemId,
                 imageUrl, 
                 filters: rawFilters,
                 creationX,
@@ -480,24 +530,30 @@ export const useCanvasStore = defineStore('canvas', {
                 
                 // 撤销逻辑：通过 ID 查找并移除
                 undo: () => {
-                    const target = findObjectById(itemId);
-                    if (target) {
-                        if (target.parent) target.parent.removeChild(target); 
+                    const itemToRemove = itemRef.current
+                    
+                    if (itemToRemove) {
+                        if (itemToRemove.parent) itemToRemove.parent.removeChild(itemToRemove); 
                         // 从 Store 数组中移除
-                        canvasThis.objects = canvasThis.objects.filter(obj => obj.id !== itemId);
+                        canvasThis.objects = canvasThis.objects.filter(obj => obj.id !== itemToRemove);
                         // 从 Renderer 数组中移除
                         if (canvasThis.renderer && canvasThis.renderer.objects) {
-                            canvasThis.renderer.objects = canvasThis.renderer.objects.filter(obj => obj.id !== itemId);
+                            canvasThis.renderer.objects = canvasThis.renderer.objects.filter(obj => obj.id !== itemToRemove);
                         }
                     }
+                    itemRef.current = null;
                     canvasThis.clearSelection();
                 },
                 
                 // 重做逻辑：异步重新渲染
                 redo: async () => {
-                    if (!findObjectById(itemId)) {
+                    if (!itemRef.current) {
                         // 重新渲染，这依赖于 renderImage/addToStage 重新将新对象推入 canvasStore.objects
-                        await canvasThis.renderer.renderImage(creationX, creationY, imageUrl, { filters: rawFilters, scale: currentScale }); 
+                      const newSprite =  await canvasThis.renderer.renderImage(creationX, creationY, imageUrl, { filters: rawFilters, scale: currentScale }); 
+                      if(newSprite){
+                        canvasThis.objects.push(newSprite)
+                        itemRef.current = newSprite
+                      }
                     }
                 }
             });
@@ -536,8 +592,12 @@ export const useCanvasStore = defineStore('canvas', {
               // 撤销：将对象重新添加到 objects 数组和舞台
               undo: () => {
                   objectsData.forEach(item => {
+                      const target = item.obj;
                       // 1. 恢复到 objects 数组和舞台
-                      canvasThis.renderer.addToStage(item.obj, item.x, item.y); 
+                      canvasThis.renderer.addToStage(target, item.x, item.y); 
+                      if (!canvasThis.objects.includes(target)) {
+                          canvasThis.objects.push(target);
+                      }
                   });
                   // 确保同步：renderer.addToStage 内部会管理 this.objects 的添加
                   
@@ -552,7 +612,8 @@ export const useCanvasStore = defineStore('canvas', {
                       // 从舞台移除
                       if (target.parent) target.parent.removeChild(target);
                       // 3. 🚨 关键：在 Redo 时销毁 PIXI 实例，使其变成坏引用
-                      target.destroy({ children: true }); 
+                      // target.destroy({ children: true }); 
+                      canvasThis.clearSelection();
                   });
                   
                   // 4. 从 canvasStore.objects 中移除这些对象的坏引用
@@ -647,6 +708,7 @@ export const useCanvasStore = defineStore('canvas', {
           data.x,
           data.y
         )
+
       }
       return newItem
     },
