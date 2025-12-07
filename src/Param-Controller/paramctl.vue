@@ -95,7 +95,17 @@
     <template v-else-if="canvasStore.currentTool === 'picture'">
       <div class="param-item">
         <label class="param-label">上传图片</label>
-        <input type="file" accept="image/*" @change="onImageFileChange">
+        <div class="file-upload-wrapper">
+          <button class="action-btn apply-btn small" @click="triggerFileInput">选择文件</button>
+          <span class="file-name" :title="currentFileName">{{ currentFileName }}</span>
+          <input 
+            ref="fileInputRef"
+            type="file" 
+            accept="image/*" 
+            @change="onImageFileChange"
+            style="display: none"
+          >
+        </div>
       </div>
       <div class="param-item">
         <label class="param-label">滤镜</label>
@@ -193,7 +203,15 @@
 <script setup>
 
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
-  const canvasStore = useCanvasStore()
+import { ref } from 'vue'
+
+const canvasStore = useCanvasStore()
+const currentFileName = ref('未选择文件')
+const fileInputRef = ref(null)
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
 
 // 应用参数（当前实现中参数是实时生效的，此按钮可用于未来扩展）
 const applyParams = () => {
@@ -217,6 +235,10 @@ const onImageFileChange = (event) => {
   const file = event.target.files && event.target.files[0]
   if (!file) return
   if (!file.type || !file.type.startsWith('image/')) return
+  
+  // 更新显示的文件名
+  currentFileName.value = file.name
+
   const reader = new FileReader()
   reader.onload = (e) => {
     const imageUrl = e.target?.result
@@ -377,5 +399,22 @@ const onImageFileChange = (event) => {
 .small {
   padding: 6px 8px;
   font-size: 12px;
+}
+
+/* 文件上传组件样式 */
+.file-upload-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.file-name {
+  font-size: 12px;
+  color: #666;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
 }
 </style>

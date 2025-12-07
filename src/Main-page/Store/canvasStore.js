@@ -482,7 +482,11 @@ export const useCanvasStore = defineStore('canvas', {
 
       this.pendingItem = null
       this.pendingType = null
-      if (shapeItem) this.objects.push(shapeItem)
+      if (shapeItem) {
+        this.objects.push(shapeItem)
+        // 强制刷新视角以修正渲染位置问题
+        this.forceViewportUpdate()
+      }
       if (this.currentTool === 'rect' || this.currentTool === 'circle' || this.currentTool === 'triangle') {
         this.preparePending(this.currentTool)
       }
@@ -513,7 +517,7 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     // 渲染图片
-    renderImage(x, y, imageUrl, options = {}) {
+    async renderImage(x, y, imageUrl, options = {}) {
       if (!this.renderer) return;
 
       // 不需要考虑画布当前的偏移量，因为stage的pivot会处理画布的偏移
@@ -523,7 +527,12 @@ export const useCanvasStore = defineStore('canvas', {
       const filterMode = options.filters || this.currentImageFilter || 'none'
       const scale = options.scale ?? this.currentImageScale ?? 1
       console.log('renderImage', { x, y, imageUrlLength: imageUrl?.length, filterMode, scale })
-      this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale })
+      await this.renderer.renderImage(x, y, imageUrl, { filters: filterMode, scale })
+
+      // 渲染完成后自动跳转视角到图片中心
+      this.centerViewportOn(x, y);
+      // 强制刷新视角以修正渲染位置问题
+      this.forceViewportUpdate();
       return;
     },
 
@@ -716,6 +725,10 @@ export const useCanvasStore = defineStore('canvas', {
     centerViewportOn(x, y) {
       this.viewport.x = x
       this.viewport.y = y
+    },
+
+    forceViewportUpdate() {
+      this.viewport.x += 0.0001
     },
   },
 
