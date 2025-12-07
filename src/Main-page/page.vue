@@ -16,7 +16,7 @@
           :icon="createVNode(SaveOutlined)"
           @click = "saveToIndexDB()"
           >保存</a-button>
-          <a-button type="default" shape="round" :icon="createVNode(ShareAltOutlined)" style="margin-left: 8px;">分享</a-button>
+          <shareButton/>
         </div>
       </div>
     </a-layout-header>
@@ -32,7 +32,7 @@
       <!-- 浮动参数面板 -->
       
       <div class="floating-param">
-        <paramctl />
+        <paramctl /> 
         <!-- 新增：画布控制按钮（测试缩放/重置） -->
         <div class="canvas-control">
           <p>当前缩放：{{ canvasStore.scalePercent }}</p>
@@ -68,7 +68,7 @@
 
     <!-- 底部页脚 -->
     <a-layout-footer class="main-footer">
-      ©2025 Pixi + Vue + Ant Design Vue 画布编辑器 | 纯UI版
+      ©2025 Pixi + Vue + Ant Design Vue 画布编辑器 
     </a-layout-footer>
   </a-layout>
 </template>
@@ -93,11 +93,16 @@ import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { Renderer } from '@/renderer/Renderer'
 import { useContextMenuStore } from './contextMenu/contextMenu'
 import contextMenu from './contextMenu/contextMenu.vue'
+import shareButton from '@/shareUtils/shareButton.vue'
 import { context } from 'ant-design-vue/es/vc-image/src/PreviewGroup'
 //引入持久化存储
 import { CanvasCache } from '@/LocalStorage/localCache'
 import { message } from 'ant-design-vue'
 import { useHistoryStore } from '@/History/History'
+
+//引入分享相关函数
+
+import { triggerFileDownload } from '@/shareUtils/share'
 
 const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)

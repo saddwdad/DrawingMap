@@ -57,6 +57,8 @@ export const useCanvasStore = defineStore('canvas', {
     currentTextContent: '',
     //跟踪绘制对象
     objects: [],
+
+     
   }),
   getters: {
 
