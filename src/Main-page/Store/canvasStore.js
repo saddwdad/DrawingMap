@@ -16,9 +16,12 @@ export const useCanvasStore = defineStore('canvas', {
     dragStart: { x: 0, y: 0 },
     dragRafId: null,
     lastDragDelta: { dx: 0, dy: 0 },
+    dragRafId: null,
+    lastDragDelta: { dx: 0, dy: 0 },
     bgColor: '#1a1a1a', // 内容背景色
     borderColor: '#333', // 内容边框色
     scalestep: 0.1,
+    scaleLimits: { min: 0.1, max: 10 },
     scaleLimits: { min: 0.1, max: 10 },
     minimap: {
       scale: 0.1,
@@ -205,6 +208,7 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
+    scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
     // 设置渲染器
@@ -239,16 +243,23 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     // 开始拖动
+    // 开始拖动
     startDrag(e) {
+      // 现在只通过右键拖动，所以不需要检查目标元素
+      // 直接设置拖动状态
       // 现在只通过右键拖动，所以不需要检查目标元素
       // 直接设置拖动状态
       this.isDragging = true
       this.dragStart = { x: e.clientX, y: e.clientY }
       this.lastDragDelta = { dx: 0, dy: 0 }
+      this.dragStart = { x: e.clientX, y: e.clientY }
+      this.lastDragDelta = { dx: 0, dy: 0 }
     },
 
     // 拖动视口
+    // 拖动视口
     dragViewport(e) {
+      if (!this.isDragging) return
       if (!this.isDragging) return
       const dx = (e.clientX - this.dragStart.x) / this.viewport.scale
       const dy = (e.clientY - this.dragStart.y) / this.viewport.scale
@@ -262,8 +273,20 @@ export const useCanvasStore = defineStore('canvas', {
           this.dragRafId = null
         })
       }
+      this.dragStart = { x: e.clientX, y: e.clientY }
+      this.lastDragDelta = { dx, dy }
+      if (!this.dragRafId) {
+        this.dragRafId = requestAnimationFrame(() => {
+          const { dx: rdx, dy: rdy } = this.lastDragDelta
+          this.viewport.x -= rdx
+          this.viewport.y -= rdy
+          this.dragRafId = null
+        })
+      }
     },
 
+    // 结束拖动
+    endDrag() {
     // 结束拖动
     endDrag() {
       this.isDragging = false
