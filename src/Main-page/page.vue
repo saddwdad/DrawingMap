@@ -61,6 +61,7 @@
         <div class="floating-minimap">
           <minimap ref="minimapRef" />
         </div>
+        <contextMenu/>
         <!-- 浮动参数控制栏 -->
       <div v-if="canvasStore.selectedObject" ref="floatingParamRef" class="floating-toolbar floating-param-container" :style="uiStore.floatingParamStyle">
         <div class="drag-handle">🖐️ 拖动</div>
@@ -743,6 +744,7 @@ const FaPalette = defineComponent({
 })
 
 function handleCanvasContextMenu(e){
+  console.log('执行调用菜单')
   contextMenuStore.showMenu(e.clientX, e.clientY);
 }
 
