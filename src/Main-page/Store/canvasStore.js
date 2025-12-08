@@ -30,7 +30,7 @@ export const useCanvasStore = defineStore('canvas', {
     objects: [],
     // 渲染相关状态
     renderer: null,
-    currentTool: 'pen',
+    currentTool: 'select',
     currentColor: '#ffffff', // 初始颜色设置为白色
     currentSize: 100,
     currentBorderWidth: 2,
@@ -245,13 +245,8 @@ export const useCanvasStore = defineStore('canvas', {
     // 开始拖动
     // 开始拖动
     startDrag(e) {
-      // 现在只通过右键拖动，所以不需要检查目标元素
-      // 直接设置拖动状态
-      // 现在只通过右键拖动，所以不需要检查目标元素
-      // 直接设置拖动状态
+
       this.isDragging = true
-      this.dragStart = { x: e.clientX, y: e.clientY }
-      this.lastDragDelta = { dx: 0, dy: 0 }
       this.dragStart = { x: e.clientX, y: e.clientY }
       this.lastDragDelta = { dx: 0, dy: 0 }
     },
@@ -285,8 +280,7 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
-    // 结束拖动
-    endDrag() {
+
     // 结束拖动
     endDrag() {
       this.isDragging = false

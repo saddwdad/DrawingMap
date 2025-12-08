@@ -7,11 +7,9 @@
         :key="tool.type"
         class="tool-btn"
         :type="tool.type === currentTool ? 'primary' : 'default'" 
-        :type="tool.type === currentTool ? 'primary' : 'default'" 
         :icon="createVNode(tool.icon, {class: 'uniformIcon'})" 
         block
         shape="round"
-        @click="(e) => handleToolClick(tool.type, e)"
         @click="(e) => handleToolClick(tool.type, e)"
       >
         {{ tool.name }}
@@ -22,8 +20,6 @@
 
 <script setup>
 
-import { ref, createVNode, h, computed } from 'vue' 
-import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined} from '@ant-design/icons-vue'
 import { ref, createVNode, h, computed } from 'vue' 
 import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined} from '@ant-design/icons-vue'
 import circle from '@/icons/circle.vue'
@@ -47,9 +43,6 @@ const FaEraser = () => {
 }
 
 const toolList = [
-  // 新增：选择工具，用于点击对象进入编辑
-  { type: 'select', name: '选择', icon: SelectOutlined },
-  { type: 'pen', name: '文本', icon: EditOutlined },
   // 新增：选择工具，用于点击对象进入编辑
   { type: 'select', name: '选择', icon: SelectOutlined },
   { type: 'pen', name: '文本', icon: EditOutlined },

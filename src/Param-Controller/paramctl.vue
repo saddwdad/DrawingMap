@@ -170,6 +170,7 @@
           >
           <span class="slider-value">{{ canvasStore.currentBorderWidth }}px</span>
         </div>
+      </div >
       <!-- 边框宽度设置 -->
       <div class="param-item">
         <label class="param-label">边框宽度</label>
@@ -185,18 +186,6 @@
           <span class="slider-value">{{ canvasStore.currentBorderWidth }}px</span>
         </div>
       </div>
-      <!-- 边框颜色选择 -->
-      <div class="param-item">
-        <label class="param-label">边框颜色</label>
-        <input 
-          type="color" 
-          class="color-input" 
-          :value="canvasStore.currentBorderColor"
-          @input="canvasStore.setCurrentBorderColor($event.target.value)"
-        >
-      </div>
-    </template>
-    <!-- 额外功能按钮 -->
       <!-- 边框颜色选择 -->
       <div class="param-item">
         <label class="param-label">边框颜色</label>

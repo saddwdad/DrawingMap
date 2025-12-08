@@ -85,7 +85,6 @@ import { FontAwesomeIcon  } from '@fortawesome/vue-fontawesome'
 import { faPalette } from '@fortawesome/free-solid-svg-icons'
 // 引入子组件
 import minimap from './minimap/minimap.vue'
-import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
 import floatingParamctl from '@/Param-Controller/floating-paramctl.vue'
@@ -121,8 +120,6 @@ let app = null
 let stage = null
 let renderer = null
 let minimapApp = null
-let renderer = null
-let minimapApp = null
 const uiStore = useUiStore()
 const canvasStore = useCanvasStore()
 const contextMenuStore = useContextMenuStore()
@@ -148,9 +145,7 @@ const {
     endDrag,
     isDragging
 } = canvasStore
-// 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
-const isErasing = ref(false)
-const objects = computed(() => canvasStore.renderer?.objects || [])
+
 // 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
 const isErasing = ref(false)
 const objects = computed(() => canvasStore.renderer?.objects || [])
@@ -244,7 +239,7 @@ const initPixi = async () => {
   // 5. 初始化渲染器并设置到store，直接使用stage作为绘制容器
   renderer = new Renderer(stage);
   // 初始化画布事件监听器（用于框选功能），传入app.stage作为参数
-  renderer.initCanvasEvents(app.stage);
+  
   canvasStore.setRenderer(renderer);
 
   await nextTick()
@@ -336,15 +331,14 @@ const handleCanvasClick = (event) => {
 // 处理鼠标按下事件 - 区分左键和右键
 const handleMouseDown = (e) => {
   // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
-  if (canvasStore.currentTool === 'select') {
+  if (canvasStore.currentTool === 'select' && e.button === 0) {
     console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
     return;
   }
   
-  // 右键按下（按钮值为2）时，开始拖动画布
+  // 中键按下（按钮值为1）时，开始拖动画布
   if (e.button === 1) {
     // 阻止默认右键菜单
-    e.preventDefault();
     startDrag(e);
     contextMenuStore.hideMenu()
   }
@@ -367,7 +361,7 @@ const handleMouseDown = (e) => {
   let dragDebounceTimer = null;
   const handleMouseMove = (e) => {
     // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
-    if (canvasStore.currentTool === 'select') {
+    if (canvasStore.currentTool === 'select' && e.buttons === 1) {
       console.log('选择工具激活，跳过DOM mousemove处理，让Pixi框选功能执行');
       return;
     }
@@ -402,7 +396,7 @@ const handleMouseDown = (e) => {
 // 处理鼠标释放事件
 const handleMouseUp = (e) => {
   // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
-  if (canvasStore.currentTool === 'select') {
+  if (canvasStore.currentTool === 'select' && e.button === 0) {
     console.log('选择工具激活，跳过DOM mouseup处理，让Pixi框选功能执行');
     return;
   }
@@ -415,7 +409,7 @@ const handleMouseUp = (e) => {
 // 处理鼠标离开事件
 const handleMouseLeave = (e) => {
   // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
-  if (canvasStore.currentTool === 'select') {
+  if (canvasStore.currentTool === 'select' && e.buttons === 1) {
     console.log('选择工具激活，跳过DOM mouseleave处理，让Pixi框选功能执行');
     return;
   }
@@ -495,20 +489,6 @@ const updatePixiViewport = () => {
       }
   }
 
-  
-  // 优先使用 app.screen (如果已初始化)，否则使用容器尺寸
-  let width = canvasContainerRef.value.clientWidth;
-  let height = canvasContainerRef.value.clientHeight;
-  
-  if (app && app.renderer) { // 检查 renderer 是否存在
-      try {
-          width = app.screen.width;
-          height = app.screen.height;
-      } catch (e) {
-          console.warn('updatePixiViewport: app.screen 访问失败，回退到容器尺寸', e);
-      }
-  }
-
   // Pixi 通过 pivot + position 控制视角（核心：无尺寸限制）
   if (stage.pivot.x !== viewport.value.x || stage.pivot.y !== viewport.value.y) {
     stage.pivot.set(viewport.value.x, viewport.value.y)
@@ -529,7 +509,7 @@ const drawInfiniteGrid = (container) => {
   const gridSize = 50 // 网格间距
   const gridColor = 0xffffff // 网格颜色
   const maxRange = 10000 // 真正无限（可设为较大值优化性能，如100000）
-  const maxRange = 10000 // 真正无限（可设为较大值优化性能，如100000）
+
   const thinLineStyle = {
     width: 1, 
     color: gridColor,
@@ -697,6 +677,8 @@ onMounted(async () => {
   document.addEventListener('triggerFileInput', triggerFileInput);
   document.addEventListener('keydown', handleKeyDown)
 
+
+  renderer.initCanvasEvents(app.stage);
 })
 
 onUnmounted(() => {
@@ -741,12 +723,7 @@ onUnmounted(() => {
 })
 
 
-const { 
-    canvasStyle, 
-    scalePercent, 
-    minimapViewportStyle,
-    viewport
-} = storeToRefs(canvasStore)
+
 
 
 

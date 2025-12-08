@@ -1,6 +1,8 @@
 import * as PIXI from 'pixi.js';
-
+import { useCanvasStore } from '@/Main-page/Store/canvasStore';
 export class Renderer {
+  
+
   constructor(stage) {
     this.stage = stage;
     this.objects = [];
@@ -11,7 +13,7 @@ export class Renderer {
     this.miniMap = null;
     this.miniMapContent = null; // 新增：小地图内容容器引用
     this.mainViewport = { x: 0, y: 0, width: 800, height: 600 };
-    
+
     // 框选功能相关变量
     this.isSelecting = false; // 是否正在进行框选
     this.selectStart = { x: 0, y: 0 }; // 框选起始坐标
@@ -23,6 +25,8 @@ export class Renderer {
     this.isDraggingGroup = false; // 是否正在进行组拖动
     this.dragOffset = { x: 0, y: 0 }; // 组拖动时的偏移量
   }
+
+
 
   initMiniMap(miniMapStage, miniMapWidth = 200, miniMapHeight = 150, miniMapScale = 0.1) {
     this.miniMap = new PIXI.Container();
@@ -312,6 +316,7 @@ export class Renderer {
 
   // 初始化画布的鼠标事件监听器（用于框选功能）
   initCanvasEvents(appStage) {
+    const canvasStore = useCanvasStore()
     // 存储当前渲染器引用，用于事件处理函数
     const renderer = this;
     this.appStage = appStage; // 保存app.stage的引用
@@ -338,15 +343,22 @@ export class Renderer {
     
     // 鼠标按下事件 - 开始框选或组拖动
     appStage.on('pointerdown', (e) => {
+      const isLeftClick = e.button === 0
+      const isMiddleClick = e.button === 1
+      const isRightClick = e.button === 2
+      const currentTool = canvasStore.currentTool
+      const isSelect = currentTool === 'select'
 
-       
+
+    if(isLeftClick && isSelect ){
         console.log('App.stage pointerdown event:', {
         target: e.target === appStage ? 'appStage' : e.target?.constructor?.name,
         globalPos: e.global,
         isSelecting: renderer.isSelecting,
         eventType: e.type,
-        button: e.button
+        button: e.button,
       });
+    
       
       // 修改：允许在任何地方点击开始框选，而不仅限于空白区域
       console.log('Starting selection (modified: allow selection anywhere)');
@@ -376,10 +388,12 @@ export class Renderer {
       
       // 更新框选区域显示
       renderer.updateSelectBox();
+    }
     });
     
+    
     // 鼠标移动事件 - 更新框选区域
- appStage.on('pointermove', (e) => {
+    appStage.on('pointermove', (e) => {
       if (renderer.isSelecting) {
         console.log('App.stage pointermove event during selection:', { globalPos: e.global });
         
@@ -654,7 +668,7 @@ export class Renderer {
       display.on('pointermove', (e) => {
         // 处理组拖动
         if (renderer.isDraggingGroup) {
-          e.stopPropagation(); // 阻止事件冒泡
+          // e.stopPropagation(); // 阻止事件冒泡
           
           // 计算新位置
           const globalPos = e.global;
@@ -698,7 +712,7 @@ export class Renderer {
         // 处理单选拖动
         if (!dragState.isDragging) return;
         
-        e.stopPropagation(); // 阻止事件冒泡
+        // e.stopPropagation(); // 阻止事件冒泡
         
         // 计算元素的新位置
         const newLocalPos = display.parent.toLocal(e.global);
