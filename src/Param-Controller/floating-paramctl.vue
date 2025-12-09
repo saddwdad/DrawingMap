@@ -141,7 +141,7 @@
           :value="borderColor"
           @mousedown="handleSliderDragStart('border-color', selectedObject)"
           @input="handleSliderInput('border-color', $event.target.value)"
-          @mouseup="handleSliderDragEnd('border-color', $event.target.value)"
+          @change="handleSliderDragEnd('border-color', $event.target.value)"
         >
       </div>
       <!-- 图形大小参数根据图形类型调整 -->

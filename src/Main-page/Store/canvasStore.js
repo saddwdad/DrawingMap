@@ -34,7 +34,7 @@ export const useCanvasStore = defineStore('canvas', {
     currentColor: '#ffffff', // 初始颜色设置为白色
     currentSize: 100,
     currentBorderWidth: 2,
-    currentBorderColor: '#333',
+    currentBorderColor: '#333333',
     currentOpacity: 1,
     // 文本相关状态
     currentFontFamily: 'Arial',
