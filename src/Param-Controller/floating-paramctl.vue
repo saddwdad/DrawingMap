@@ -41,7 +41,9 @@
             min="8"
             max="128"
             :value="fontSize"
-            @input="updateTextProperty('font-size', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('font-size', selectedObject)"
+            @input="handleSliderInput('font-size', Number($event.target.value))"
+            @mouseup="handleSliderDragEnd('font-size', Number($event.target.value))"
           >
           <span class="slider-value">{{ fontSize }}px</span>
         </div>
@@ -53,7 +55,9 @@
           type="color"
           class="color-input"
           :value="color"
-          @input="updateTextProperty('color', $event.target.value)"
+          @mousedown="handleSliderDragStart('color', selectedObject)"
+          @input="handleSliderInput('color', $event.target.value)"
+          @change="handleSliderDragEnd('color', $event.target.value)"
         >
       </div>
       <!-- 背景色 -->
@@ -64,7 +68,9 @@
             type="color"
             class="color-input"
             :value="background || '#000000'"
-            @input="updateTextProperty('background', $event.target.value)"
+            @mousedown="handleSliderDragStart('background', selectedObject)"
+            @input="handleSliderInput('background', $event.target.value)"
+            @mouseup="handleSliderDragEnd('background', $event.target.value)"
           >
           <button class="action-btn reset-btn small" @click="updateTextProperty('background', null)">无背景</button>
         </div>
@@ -88,7 +94,9 @@
           type="color" 
           class="color-input" 
           :value="background"
-          @input="updateShapeProperty('background', $event.target.value)"
+          @mousedown="handleSliderDragStart('background', selectedObject)"
+          @input="handleSliderInput('background', $event.target.value)"
+          @change="handleSliderDragEnd('background', $event.target.value)"
         >
       </div>
       <!-- 透明度 -->
@@ -117,7 +125,9 @@
             min="1" 
             max="20" 
             :value="borderWidth"
-            @input="updateShapeProperty('border-width', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('border-width', selectedObject)"
+            @input="handleSliderInput('border-width', $event.target.value)"
+            @mouseup="handleSliderDragEnd('border-width', $event.target.value)"
           >
           <span class="slider-value">{{ borderWidth }}px</span>
         </div>
@@ -129,7 +139,9 @@
           type="color" 
           class="color-input" 
           :value="borderColor"
-          @input="updateShapeProperty('border-color', $event.target.value)"
+          @mousedown="handleSliderDragStart('border-color', selectedObject)"
+          @input="handleSliderInput('border-color', $event.target.value)"
+          @mouseup="handleSliderDragEnd('border-color', $event.target.value)"
         >
       </div>
       <!-- 图形大小参数根据图形类型调整 -->
@@ -142,7 +154,9 @@
             min="20" 
             max="400" 
             :value="shapeWidth"
-            @input="updateShapeProperty('width', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('width', selectedObject)"
+            @input="handleSliderInput('width', $event.target.value)"
+            @mouseup="handleSliderDragEnd('width', $event.target.value)"
           >
           <span class="slider-value">{{ shapeWidth }}px</span>
         </div>
@@ -156,7 +170,9 @@
             min="20" 
             max="400" 
             :value="shapeHeight"
-            @input="updateShapeProperty('height', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('height', selectedObject)"
+            @input="handleSliderInput('height', $event.target.value)"
+            @mouseup="handleSliderDragEnd('height', $event.target.value)"
           >
           <span class="slider-value">{{ shapeHeight }}px</span>
         </div>
@@ -170,7 +186,9 @@
             min="20" 
             max="200" 
             :value="radius"
-            @input="updateShapeProperty('radius', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('radius', selectedObject)"
+            @input="handleSliderInput('radius', $event.target.value)"
+            @mouseup="handleSliderDragEnd('radius', $event.target.value)"
           >
           <span class="slider-value">{{ radius }}px</span>
         </div>
@@ -184,7 +202,9 @@
             min="20" 
             max="400" 
             :value="triangleSize"
-            @input="updateShapeProperty('size', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('size', selectedObject)"
+            @input="handleSliderInput('size', $event.target.value)"
+            @mouseup="handleSliderDragEnd('size', $event.target.value)"
           >
           <span class="slider-value">{{ triangleSize }}px</span>
         </div>
@@ -202,7 +222,8 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { useUiStore } from '@/Main-page/Store/UIStore'
-
+import { useHistoryStore } from '@/History/History'
+const historyStore = useHistoryStore()
 const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
@@ -229,8 +250,108 @@ const shapeHeight = ref(100)
 const radius = ref(50)
 const triangleSize = ref(100)
 const borderWidth = ref(2)
-const borderColor = ref('#333')
+const borderColor = ref('#333333')
 const opacity = ref(1)
+
+//拖动属性
+let dragStartProps = null; 
+let dragDisplayId = null;
+
+//处理鼠标按下
+const handleSliderDragStart = (property, display) => {
+    
+    dragDisplayId = display.id;
+    dragStartProps = capturePropsSnapshot(display);
+    console.log(dragStartProps) 
+    uiStore.setFloatingParamDragging(true); 
+    console.log('--- Drag Start (快照捕获) ---'); 
+};
+//处理鼠标拖拽
+const handleSliderInput = (property, value) => {
+    if (!selectedObject.value) return;
+
+    const currentDisplay = selectedObject.value;
+    const props = {};
+    
+    if (currentDisplay._shape.type === 'text') {
+        props[property] = value;
+        if (property === 'font-size' || property === 'font-family' || property === 'color' || property === 'background') {
+             updateTextProperty(property, value, { record: false }); 
+        } else {
+             updateTextContent(value, { record: false });
+        }
+        
+    } else {
+        props[property] = value;
+        canvasStore.renderer.applyShapeChange(currentDisplay, props);
+    }
+    
+    switch(property){
+      case 'width':
+        shapeWidth.value = value;
+        break;
+      case 'height':
+        shapeHeight.value = value;
+        break;
+      case 'radius':
+        radius.value = value;
+        break;
+      case 'size': 
+        triangleSize.value = value;
+        break;
+      case 'border-width':
+        borderWidth.value = value;
+        break;
+      case 'opacity':
+        opacity.value = value;
+        break;
+      case 'font-size':
+        fontSize.value = value;
+        break; 
+      case 'background':
+        background.value = value;
+        break;
+      case 'border-color' :
+        borderColor.value = value;
+        break;
+      case 'color' :
+        color.value = value;
+        break;
+    }
+};
+
+//处理鼠标结束拖拽
+const handleSliderDragEnd = (property, value) => {
+    const currentDisplay = selectedObject.value;
+    uiStore.setFloatingParamDragging(false); 
+    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+        dragStartProps = null;
+        dragDisplayId = null;
+        return;
+    }
+    
+    // 确保最终值已应用
+    const props = {};
+    props[property] = value;
+    canvasStore.renderer.applyShapeChange(currentDisplay, props);
+
+    const finalProps = capturePropsSnapshot(currentDisplay);
+    const startPropsForHistory = dragStartProps;
+    // 记录合并的历史操作
+    if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
+        historyStore.recordAction({
+            type: `slide_change_${currentDisplay._shape.type}`,
+            undo: () => canvasStore.renderer.updateShape(currentDisplay, startPropsForHistory),
+            redo: () => canvasStore.renderer.updateShape(currentDisplay, finalProps),
+        });
+        console.log('--- Drag End (合并历史记录) ---'); // 检查点
+        console.log(finalProps)
+    }
+
+    // 重置状态
+    dragStartProps = null;
+    dragDisplayId = null;
+};
 
 // 从选中对象中提取属性值
 const updatePropertiesFromObject = (obj) => {
@@ -250,7 +371,7 @@ const updatePropertiesFromObject = (obj) => {
     const style = obj._style || {}
     background.value = style.background || '#42b983'
     borderWidth.value = style.borderWidth || 2
-    borderColor.value = style.borderColor || '#333'
+    borderColor.value = style.borderColor || '#333333'
     opacity.value = obj.alpha || 1
     
     // 根据图形类型更新尺寸属性
@@ -264,6 +385,41 @@ const updatePropertiesFromObject = (obj) => {
     }
   }
 }
+
+
+const capturePropsSnapshot = (display) => {
+    if (!display || !display._shape) return {};
+    
+    const shape = display._shape;
+    const style = display._style || {};
+    
+    
+    const snapshot = {
+        // 几何属性
+        width: shape.width,
+        height: shape.height,
+        radius: shape.radius,
+        size: shape.size,
+        text: display.text, 
+
+        // 样式属性 (来自 _style)
+        background: style.background,
+        'border-width': style.borderWidth,
+        'border-color': style.borderColor,
+        opacity: display.alpha,
+        
+        // 文本样式属性 (来自 display.style)
+        'font-family': display.style?.fontFamily,
+        'font-size': display.style?.fontSize,
+        color: display.style?.fill,
+        bold: display.style?.fontWeight === 'bold',
+        italic: display.style?.fontStyle === 'italic',
+        underline: display.style?.underline,
+        lineThrough: display.style?.lineThrough
+        
+    };
+    return snapshot;
+};
 
 // 监听选中对象变化，更新属性值
 watch(() => canvasStore.selectedObject, (newObj) => {
@@ -319,9 +475,9 @@ const toggleTextProperty = (property) => {
 const updateShapeProperty = (property, value) => {
   if (selectedObject.value && selectedObject.value._shape.type !== 'text') {
     const props = {}
+    const currentDisplay = selectedObject.value;
     props[property] = value
-    canvasStore.renderer.updateShape(selectedObject.value, props)
-    
+    canvasStore.renderer.updateShape(currentDisplay, props);
     // 更新本地状态
     if (property === 'width') shapeWidth.value = value
     if (property === 'height') shapeHeight.value = value

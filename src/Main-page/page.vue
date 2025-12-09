@@ -286,11 +286,7 @@ const handleCanvasClick = (event) => {
   const currentTool = canvasStore.currentTool;
   console.log('handleCanvasClick触发，当前工具:', currentTool);
   
-  // 选择工具：完全跳过点击处理，让Pixi的框选功能正常工作
-  if (currentTool === 'select') {
-    console.log('选择工具激活，跳过DOM点击处理，让Pixi框选功能执行');
-    return; // 直接返回，不执行任何操作
-  }
+
   
   // 获取画布容器的实际尺寸
   const rect = pixiMountRef.value.getBoundingClientRect();

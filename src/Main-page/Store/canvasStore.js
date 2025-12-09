@@ -477,31 +477,6 @@ export const useCanvasStore = defineStore('canvas', {
                 canvasThis.pendingItem = null;
                 canvasThis.renderer.render && canvasThis.renderer.render();
               }
-            //   const recreatedObjects = await canvasThis.reconstructItem(originalData)
-
-            //   if(recreatedObjects){
-            //     canvasThis.objects.push(recreatedObjects)
-                
-            //     if(recreatedObjects.position){
-            //       recreatedObjects.position.set(originalData.x, originalData.y)
-            //       const stage = canvasThis.renderer.stage;
-            //       if (stage && stage.updateTransform) {
-            //     // 【核心修复】强制 Stage 的 World Transform 立即生效
-            //     // 这次我们不直接调用 updateTransform，而是调用 updateTransform() 的包装函数（如果有）。
-            //     // 如果没有，直接调用 updateTransform 是可以接受的，但需要确保 Stage 是健康的。
-            //     // 鉴于您之前 updateTransform 失败，我们相信渲染器能在 render 时处理。
-                
-            //     // 针对您的问题，最常见的解决方案是确保父级和祖父级的缓存被清除：
-            //       if (recreatedObjects.parent && recreatedObjects.parent.parent) {
-            //           // 假设父级的父级是 Viewport/World 容器，强制更新它
-            //           // 这相当于手动触发了缩放操作中的 World 矩阵更新
-            //           recreatedObjects.parent.parent.updateTransform(); 
-            //       }
-            //    }
-            //   }
-            // canvasThis.renderer.render && canvasThis.renderer.render();
-
-            // }
 
               canvasThis.cleanupObjects(); // 执行清理
             }

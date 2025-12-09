@@ -2,6 +2,7 @@
   "name": "drawing-page",
   "version": "0.0.0",
   "private": true,
+  "main": "electron.cjs",
   "type": "module",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -9,7 +10,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
@@ -24,8 +27,29 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
     "unplugin-vue-components": "^30.0.0",
     "vite": "^6.4.1",
     "vite-plugin-vue-devtools": "^7.7.9"
+  },
+  "build": {
+    "appId": "com.Mycompany.pixieditor", 
+    "productName": "Pixi画布编辑器", 
+    "copyright": "Copyright © 2025 李明睿，叶云瀚，黄津楷",
+    "files": [
+      "dist/**/*",      
+      "electron.cjs"     
+    ],
+    "directories": {
+      "output": "release" 
+    },
+    "win": {
+      "target": "nsis" 
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    }
   }
 }
