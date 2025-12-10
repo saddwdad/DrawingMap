@@ -15,7 +15,9 @@
         <textarea
           class="text-area"
           :value="textContent"
+          @focus="handleTextEditStart(selectedObject)"
           @input="updateTextContent($event.target.value)"
+          @blur="handleTextEditEnd($event.target.value)"
           rows="2"
           placeholder="输入文本内容"
         />
@@ -257,6 +259,38 @@ const opacity = ref(1)
 let dragStartProps = null; 
 let dragDisplayId = null;
 
+//记录BIUS
+const recordToggleAction = (display, property, currentValue) => {
+    const newValue = !currentValue;
+    const propsToApply = { [property]: newValue };
+    const oldPropsSnapshot = capturePropsSnapshot(display); 
+    canvasStore.renderer.updateShape(display, propsToApply, false); 
+    const newPropsSnapshot = capturePropsSnapshot(display);
+    if (JSON.stringify(oldPropsSnapshot) !== JSON.stringify(newPropsSnapshot)) {
+        const displayId = display.id; 
+        
+        historyStore.recordAction({
+            type: `text_prop_toggle_${property}`,
+            undo: () => {
+                const activeObj = canvasStore.getObjectById(displayId);
+                if (activeObj) {
+                    canvasStore.renderer.updateShape(activeObj, oldPropsSnapshot, false); 
+                }
+            },
+            redo: () => {
+                const activeObj = canvasStore.getObjectById(displayId);
+                if (activeObj) {
+                    canvasStore.renderer.updateShape(activeObj, newPropsSnapshot, false);
+                }
+            },
+        });
+        
+        console.log(`[BIUS] ${property} 历史记录已创建。`);
+    }
+
+    return newValue;
+};
+
 //处理鼠标按下
 const handleSliderDragStart = (property, display) => {
     
@@ -353,7 +387,61 @@ const handleSliderDragEnd = (property, value) => {
     dragDisplayId = null;
 };
 
-// 从选中对象中提取属性值
+//文本处理开始
+const handleTextEditStart = (display) => {
+    
+    dragDisplayId = display.id;
+    
+    dragStartProps = capturePropsSnapshot(display); 
+    
+    console.log('--- Text Edit Start (捕获旧文本快照) ---');
+    
+    console.log(dragStartProps)
+}
+//实时文本更新
+// const handleTextInput = (value) => {
+//     if (!selectedObject.value || selectedObject.value._shape.type !== 'text') return
+//     const currentDisplay = selectedObject.value
+//     updateTextContent(value)
+//     updateTextProperty(value) 
+//     textContent.value = value
+// };
+//捕获新的文本快照
+const handleTextEditEnd = (newValue) => {
+    const currentDisplay = selectedObject.value;
+    
+
+    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+        dragStartProps = null;
+        dragDisplayId = null;
+        return;
+    }
+    const finalProps = capturePropsSnapshot(currentDisplay);
+    finalProps.text = newValue; 
+    const startPropsForHistory = dragStartProps;
+    if (startPropsForHistory.text !== finalProps.text) {
+        
+        const displayId = currentDisplay.id; 
+        
+        historyStore.recordAction({
+            type: `text_content_change`,
+            undo: () => canvasStore.renderer.updateShape(
+                canvasStore.getObjectById(displayId), 
+                { text: startPropsForHistory.text }
+            ),
+            redo: () => canvasStore.renderer.updateShape(
+                canvasStore.getObjectById(displayId), 
+                { text: finalProps.text }
+            ),
+        });
+        console.log('--- Text Edit End (合并文本输入历史记录) ---');
+        console.log({ oldValue: startPropsForHistory.text, newValue: finalProps.text });
+    }
+    dragStartProps = null;
+    dragDisplayId = null;
+};
+
+
 const updatePropertiesFromObject = (obj) => {
   if (obj._shape.type === 'text') {
     // 更新文本属性
@@ -386,7 +474,7 @@ const updatePropertiesFromObject = (obj) => {
   }
 }
 
-
+//捕获当前对象属性
 const capturePropsSnapshot = (display) => {
     if (!display || !display._shape) return {};
     
@@ -454,20 +542,33 @@ const updateTextProperty = (property, value) => {
 // 切换文本样式属性
 const toggleTextProperty = (property) => {
   if (selectedObject.value && selectedObject.value._shape.type === 'text') {
-    const currentValue = property === 'bold' ? bold.value : 
-                        property === 'italic' ? italic.value :
-                        property === 'underline' ? underline.value :
-                        lineThrough.value
+    const display = selectedObject.value;
+        let currentState;
+        if (property === 'bold') {
+            currentState = display.style.fontWeight === 'bold';
+        } else if (property === 'italic') {
+            currentState = display.style.fontStyle === 'italic';
+        } else if (property === 'underline') {
+            currentState = !!display.style.underline;
+        } else if (property === 'lineThrough') {
+            currentState = !!display.style.lineThrough;
+        } else {
+            return;
+        }
+    // const currentValue = property === 'bold' ? bold.value : 
+    //                     property === 'italic' ? italic.value :
+    //                     property === 'underline' ? underline.value :
+    //                     lineThrough.value
     
-    const props = {}
-    props[property] = !currentValue
-    canvasStore.renderer.updateShape(selectedObject.value, props)
+    // const props = {}
+    // props[property] = !currentValue
+    const newValue = recordToggleAction(display, property, currentState);
     
     // 更新本地状态
-    if (property === 'bold') bold.value = !currentValue
-    if (property === 'italic') italic.value = !currentValue
-    if (property === 'underline') underline.value = !currentValue
-    if (property === 'lineThrough') lineThrough.value = !currentValue
+    if (property === 'bold') bold.value = newValue
+    if (property === 'italic') italic.value = newValue
+    if (property === 'underline') underline.value = newValue
+    if (property === 'lineThrough') lineThrough.value = newValue
   }
 }
 
@@ -494,6 +595,8 @@ const updateShapeProperty = (property, value) => {
 const closeFloatingPanel = () => {
   canvasStore.setSelected(null)
 }
+
+
 </script>
 
 <style scoped>

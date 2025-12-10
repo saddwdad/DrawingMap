@@ -34,18 +34,18 @@
     "vite-plugin-vue-devtools": "^7.7.9"
   },
   "build": {
-    "appId": "com.Mycompany.pixieditor", 
-    "productName": "Pixi画布编辑器", 
+    "appId": "com.Mycompany.pixieditor",
+    "productName": "Pixi画布编辑器",
     "copyright": "Copyright © 2025 李明睿，叶云瀚，黄津楷",
     "files": [
-      "dist/**/*",      
-      "electron.cjs"     
+      "dist/**/*",
+      "electron.cjs"
     ],
     "directories": {
-      "output": "release" 
+      "output": "release"
     },
     "win": {
-      "target": "nsis" 
+      "target": "nsis"
     },
     "mac": {
       "target": "dmg",

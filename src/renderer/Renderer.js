@@ -854,7 +854,7 @@ export class Renderer {
     }
 
   // 更新已有形状样式或几何：统一入口，形状与文本均可
-  updateShape(display, props = {}) {
+  updateShape(display, props = {}, shouldRecord = true) {
     const historyStore = useHistoryStore()
     if (!display || !display._shape) return
     console.log(props)

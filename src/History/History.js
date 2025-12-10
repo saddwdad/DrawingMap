@@ -142,6 +142,7 @@ export const useHistoryStore = defineStore('history', {
         canvasStore.clearSelection()
       }
     }
+    
   },
   persist: {
     enabled: false

@@ -213,6 +213,20 @@ export const useCanvasStore = defineStore('canvas', {
   actions: {
     // 设置渲染器
     
+    getObjectById(id) {
+        if (!id || !Array.isArray(this.objects)) {
+            return null
+        }
+
+        const foundObject = this.objects.find(obj => obj.id === id)
+        
+        if (!foundObject) {
+             console.warn(`[ID Lookup] 未在当前对象列表中找到 ID: ${id}`)
+        }
+        
+        return foundObject || null
+    },
+
     centerViewportOnWorldCoords(worldX, worldY) {
       this.viewport.x = worldX
       this.viewport.y = worldY
@@ -230,7 +244,7 @@ export const useCanvasStore = defineStore('canvas', {
       }
     },
 
-
+    
 
 
     // 初始化视口大小
