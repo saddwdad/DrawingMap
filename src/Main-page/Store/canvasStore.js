@@ -437,6 +437,7 @@ export const useCanvasStore = defineStore('canvas', {
         shapeItem.type = this.pendingType;
         
         shapeItem = this.renderer.addToStage(shapeItem, x, y)
+        this.forceViewpotUpdate()
         const [originalData] = serializePixiObjects([shapeItem]);
         // originalData.x = x
         // originalData.y = y
@@ -514,7 +515,7 @@ export const useCanvasStore = defineStore('canvas', {
         try {
             // 1. 异步渲染图片并添加到舞台 (等待 Promise 返回)
             const imageItem = await this.renderer.renderImage(x, y, imageUrl, { filters, scale });
-
+            this.forceViewpotUpdate()
             if (!imageItem || !imageItem.id) {
                 console.warn('图片对象创建失败或缺少ID，无法记录历史。');
                 return;
@@ -562,6 +563,7 @@ export const useCanvasStore = defineStore('canvas', {
                     if (!itemRef.current) {
                         // 重新渲染，这依赖于 renderImage/addToStage 重新将新对象推入 canvasStore.objects
                       const newSprite =  await canvasThis.renderer.renderImage(creationX, creationY, imageUrl, { filters: rawFilters, scale: currentScale }); 
+                      this.forceViewpotUpdate()
                       if(newSprite){
                         canvasThis.objects.push(newSprite)
                         itemRef.current = newSprite
@@ -917,6 +919,9 @@ export const useCanvasStore = defineStore('canvas', {
       this.viewport.scale = scale
     },
 
+    forceViewpotUpdate(){
+      this.viewport.x += 0.00001
+    },
 
     resetCanvas() {
       this.viewport.x = 0
