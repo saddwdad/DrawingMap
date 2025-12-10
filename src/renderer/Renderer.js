@@ -584,13 +584,13 @@ export class Renderer {
   }
   
   // 将图形对象添加到舞台并设置位置
-  addToStage(display, x, y) {
+  addToStage(display, x, y, existingId = null) {
 
     console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
     display.position.set(x, y)
     this.stage.addChild(display)
     this.objects.push(display)
-    display.id = nextUniqueId()
+    display.id = existingId || nextUniqueId()
     this.objectMap.push(display.id)
     console.log(`x: ${x}, y: ${y}`)
     if (this.canvasStore && this.canvasStore.objects) {
@@ -868,7 +868,6 @@ export class Renderer {
         radius: shape.radius,
         size: shape.size,
         text: display.text, 
-
         background: style.background,
         'border-width': style.borderWidth,
         'border-color': style.borderColor,

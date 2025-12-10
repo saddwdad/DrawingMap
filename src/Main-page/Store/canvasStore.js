@@ -426,6 +426,8 @@ export const useCanvasStore = defineStore('canvas', {
         if (!this.renderer) return console.log("无渲染器")
         if (!Array.isArray(this.objects)) this.objects = []
 
+        let startProps = null
+        const topAction = historyStore.getTopAction;
 
 
         // 形状场景
@@ -445,14 +447,14 @@ export const useCanvasStore = defineStore('canvas', {
         const renderX = x;
         const renderY = y;
         const shapeType = this.pendingType; // 存储当前形状类型
-
+        const capturedId = shapeItem.id
         historyStore.recordAction({
             type: `add_${shapeType}`,
             originalData: originalData,
-
             shapeType: shapeType, 
             undo: () => {
-              const itemToRemove = itemRef.current
+              const itemToRemove = canvasThis.objects.find(obj => obj.id === capturedId)
+              console.log('当前撤销的对象id是',itemToRemove.id)
               const target = canvasThis.objects.find(obj => obj === itemToRemove)
               if (target) {
                 if (target.parent) target.parent.removeChild(target)
@@ -484,9 +486,11 @@ export const useCanvasStore = defineStore('canvas', {
                   break;
               }
               const newShape = canvasThis.pendingItem
-              itemRef.current = newShape
+              // itemRef.current = newShape
+
               if (newShape && newShape.x !== undefined && newShape.y !== undefined) {
-                canvasThis.renderer.addToStage(newShape, renderX, renderY);
+                console.log('捕获的id是：' ,capturedId)
+                canvasThis.renderer.addToStage(newShape, renderX, renderY, capturedId);
                 canvasThis.objects.push(newShape);
                 canvasThis.pendingItem = null;
                 canvasThis.renderer.render && canvasThis.renderer.render();

@@ -21,7 +21,7 @@ export const useHistoryStore = defineStore('history', {
     canUndo: (state) => state.undoStack.length > 0,
     canRedo: (state) => state.redoStack.length > 0,
     undoCount: (state) => state.undoStack.length,
-    redoCount: (state) => state.redoStack.length
+    redoCount: (state) => state.redoStack.length,
   },
   actions: {
     /**

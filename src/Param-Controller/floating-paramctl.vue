@@ -371,16 +371,27 @@ const handleSliderDragEnd = (property, value) => {
     const props = {};
     props[property] = value;
     canvasStore.renderer.applyShapeChange(currentDisplay, props);
-
+    const displayId = currentDisplay.id;
     const finalProps = capturePropsSnapshot(currentDisplay);
     const startPropsForHistory = dragStartProps;
     // 记录合并的历史操作
     if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
         historyStore.recordAction({
             type: `slide_change_${currentDisplay._shape.type}`,
-            undo: () => canvasStore.renderer.updateShape(currentDisplay, startPropsForHistory),
-            redo: () => canvasStore.renderer.updateShape(currentDisplay, finalProps),
-        });
+            undo: () => {
+              const activeObj = canvasStore.getObjectById(displayId);
+              if(activeObj){
+                canvasStore.renderer.updateShape(activeObj, startPropsForHistory)
+              }
+            },
+            
+            redo: () => {
+              const activeObj = canvasStore.getObjectById(displayId)
+              if(activeObj){
+                canvasStore.renderer.updateShape(activeObj, finalProps)
+              }
+            }
+          });
         console.log('--- Drag End (合并历史记录) ---'); // 检查点
         console.log(finalProps)
     }
