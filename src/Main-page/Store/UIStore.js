@@ -13,12 +13,13 @@ export const useUiStore = defineStore('ui', {
     floatingParam: {
       position: { left: 0, top: 0 }, // 初始位置
       isDragging: false, // 是否正在拖拽
+      isSliderActive: false,//是否正在拖拽滑块
       size: { width: 220, height: 'auto' } // 尺寸
     },
     // 画布UI状态（纯视觉配置）
     canvas: {
       bgColor: '#1a1a1a', // 画布背景色
-      border: '1px solid #333', // 画布边框
+      border: '1px solid #333333', // 画布边框
       borderRadius: '8px', // 画布圆角
       placeholderShow: true, // 占位符是否显示
       mountPointShow: false // Pixi挂载点是否显示
@@ -86,6 +87,8 @@ export const useUiStore = defineStore('ui', {
         }
       }
 
+
+
       // 鼠标移动：更新位置
       const handleMouseMove = (e) => {
         if (!this.toolbar.isDragging) return
@@ -115,6 +118,10 @@ export const useUiStore = defineStore('ui', {
         document.removeEventListener('mousemove', handleMouseMove)
         document.removeEventListener('mouseup', handleMouseUp)
       }
+    },
+
+    setFloatingParamDragging(isSliderActive) {
+        this.floatingParam.isSliderActive = isSliderActive
     },
     /**
      * 初始化浮动参数控制栏拖拽

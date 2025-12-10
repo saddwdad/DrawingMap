@@ -8,14 +8,16 @@
     </h3>
     
     <!-- 针对选中对象类型显示不同的参数编辑选项 -->
-    <template v-if="selectedObject._shape.type === 'text'">
+    <template v-if="(selectedObject._shape?.type || selectedObject.type) === 'text'">
       <!-- 文本内容 -->
       <div class="param-item">
         <label class="param-label">文本内容</label>
         <textarea
           class="text-area"
           :value="textContent"
+          @focus="handleTextEditStart(selectedObject)"
           @input="updateTextContent($event.target.value)"
+          @blur="handleTextEditEnd($event.target.value)"
           rows="2"
           placeholder="输入文本内容"
         />
@@ -41,7 +43,9 @@
             min="8"
             max="128"
             :value="fontSize"
-            @input="updateTextProperty('font-size', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('font-size', selectedObject)"
+            @input="handleSliderInput('font-size', Number($event.target.value))"
+            @mouseup="handleSliderDragEnd('font-size', Number($event.target.value))"
           >
           <span class="slider-value">{{ fontSize }}px</span>
         </div>
@@ -53,7 +57,9 @@
           type="color"
           class="color-input"
           :value="color"
-          @input="updateTextProperty('color', $event.target.value)"
+          @mousedown="handleSliderDragStart('color', selectedObject)"
+          @input="handleSliderInput('color', $event.target.value)"
+          @change="handleSliderDragEnd('color', $event.target.value)"
         >
       </div>
       <!-- 背景色 -->
@@ -64,7 +70,9 @@
             type="color"
             class="color-input"
             :value="background || '#000000'"
-            @input="updateTextProperty('background', $event.target.value)"
+            @mousedown="handleSliderDragStart('background', selectedObject)"
+            @input="handleSliderInput('background', $event.target.value)"
+            @mouseup="handleSliderDragEnd('background', $event.target.value)"
           >
           <button class="action-btn reset-btn small" @click="updateTextProperty('background', null)">无背景</button>
         </div>
@@ -80,6 +88,41 @@
         </div>
       </div>
     </template>
+    <template v-else-if="selectedObject.imageUrl !== undefined">
+      <!-- 图片参数编辑 -->
+      <div class="param-item">
+        <label class="param-label">图片滤镜</label>
+        <a-select 
+          v-model:value="imageFilter" 
+          placeholder="选择滤镜" 
+          class="filter-select"
+          @mousedown="handleSliderDragStart('filters', selectedObject)"
+          @change="handleFilterChange($event)"
+        >
+          <a-select-option value="none">无滤镜</a-select-option>
+          <a-select-option value="green">绿色</a-select-option>
+          <a-select-option value="warm">暖色</a-select-option>
+          <a-select-option value="cool">冷色</a-select-option>
+        </a-select>
+      </div>
+      <div class="param-item">
+        <label class="param-label">图片缩放</label>
+        <div class="slider-group">
+          <input 
+            type="range" 
+            class="param-slider" 
+            min="0.1" 
+            max="3" 
+            step="0.1"
+            :value="imageScale"
+            @mousedown="handleSliderDragStart('scale', selectedObject)"
+            @input="handleImageScaleChange($event.target.value)"
+            @mouseup="handleSliderDragEnd('scale', { x: Number($event.target.value), y: Number($event.target.value) })"
+          >
+          <span class="slider-value">{{ (imageScale * 100).toFixed(0) }}%</span>
+        </div>
+      </div>
+    </template>
     <template v-else>
       <!-- 图形颜色 -->
       <div class="param-item">
@@ -88,7 +131,9 @@
           type="color" 
           class="color-input" 
           :value="background"
-          @input="updateShapeProperty('background', $event.target.value)"
+          @mousedown="handleSliderDragStart('background', selectedObject)"
+          @input="handleSliderInput('background', $event.target.value)"
+          @change="handleSliderDragEnd('background', $event.target.value)"
         >
       </div>
       <!-- 透明度 -->
@@ -117,7 +162,9 @@
             min="1" 
             max="20" 
             :value="borderWidth"
-            @input="updateShapeProperty('border-width', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('border-width', selectedObject)"
+            @input="handleSliderInput('border-width', $event.target.value)"
+            @mouseup="handleSliderDragEnd('border-width', $event.target.value)"
           >
           <span class="slider-value">{{ borderWidth }}px</span>
         </div>
@@ -129,11 +176,13 @@
           type="color" 
           class="color-input" 
           :value="borderColor"
-          @input="updateShapeProperty('border-color', $event.target.value)"
+          @mousedown="handleSliderDragStart('border-color', selectedObject)"
+          @input="handleSliderInput('border-color', $event.target.value)"
+          @change="handleSliderDragEnd('border-color', $event.target.value)"
         >
       </div>
       <!-- 图形大小参数根据图形类型调整 -->
-      <div class="param-item" v-if="selectedObject._shape.type === 'rect'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'rect'">
         <label class="param-label">宽度</label>
         <div class="slider-group">
           <input 
@@ -142,7 +191,9 @@
             min="20" 
             max="400" 
             :value="shapeWidth"
-            @input="updateShapeProperty('width', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('width', selectedObject)"
+            @input="handleSliderInput('width', $event.target.value)"
+            @mouseup="handleSliderDragEnd('width', $event.target.value)"
           >
           <span class="slider-value">{{ shapeWidth }}px</span>
         </div>
@@ -156,12 +207,14 @@
             min="20" 
             max="400" 
             :value="shapeHeight"
-            @input="updateShapeProperty('height', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('height', selectedObject)"
+            @input="handleSliderInput('height', $event.target.value)"
+            @mouseup="handleSliderDragEnd('height', $event.target.value)"
           >
           <span class="slider-value">{{ shapeHeight }}px</span>
         </div>
       </div>
-      <div class="param-item" v-if="selectedObject._shape.type === 'circle'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'circle'">
         <label class="param-label">半径</label>
         <div class="slider-group">
           <input 
@@ -170,12 +223,14 @@
             min="20" 
             max="200" 
             :value="radius"
-            @input="updateShapeProperty('radius', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('radius', selectedObject)"
+            @input="handleSliderInput('radius', $event.target.value)"
+            @mouseup="handleSliderDragEnd('radius', $event.target.value)"
           >
           <span class="slider-value">{{ radius }}px</span>
         </div>
       </div>
-      <div class="param-item" v-if="selectedObject._shape.type === 'triangle'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'triangle'">
         <label class="param-label">大小</label>
         <div class="slider-group">
           <input 
@@ -184,7 +239,9 @@
             min="20" 
             max="400" 
             :value="triangleSize"
-            @input="updateShapeProperty('size', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('size', selectedObject)"
+            @input="handleSliderInput('size', $event.target.value)"
+            @mouseup="handleSliderDragEnd('size', $event.target.value)"
           >
           <span class="slider-value">{{ triangleSize }}px</span>
         </div>
@@ -202,7 +259,8 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { useUiStore } from '@/Main-page/Store/UIStore'
-
+import { useHistoryStore } from '@/History/History'
+const historyStore = useHistoryStore()
 const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
@@ -229,12 +287,237 @@ const shapeHeight = ref(100)
 const radius = ref(50)
 const triangleSize = ref(100)
 const borderWidth = ref(2)
-const borderColor = ref('#333')
+const borderColor = ref('#333333')
 const opacity = ref(1)
 
-// 从选中对象中提取属性值
+//拖动属性
+let dragStartProps = null; 
+let dragDisplayId = null;
+//文本属性
+let textStartProps = null;
+let textDisplayId = null;
+
+//记录BIUS
+const recordToggleAction = (display, property, currentValue) => {
+    const newValue = !currentValue;
+    const propsToApply = { [property]: newValue };
+    const oldPropsSnapshot = capturePropsSnapshot(display); 
+    canvasStore.renderer.updateShape(display, propsToApply, false); 
+    const newPropsSnapshot = capturePropsSnapshot(display);
+    if (JSON.stringify(oldPropsSnapshot) !== JSON.stringify(newPropsSnapshot)) {
+        const displayId = display.id; 
+        
+        historyStore.recordAction({
+            type: `text_prop_toggle_${property}`,
+            undo: () => {
+                const activeObj = canvasStore.getObjectById(displayId);
+                if (activeObj) {
+                    canvasStore.renderer.updateShape(activeObj, oldPropsSnapshot, false); 
+                }
+            },
+            redo: () => {
+                const activeObj = canvasStore.getObjectById(displayId);
+                if (activeObj) {
+                    canvasStore.renderer.updateShape(activeObj, newPropsSnapshot, false);
+                }
+            },
+        });
+        
+        console.log(`[BIUS] ${property} 历史记录已创建。`);
+    }
+
+    return newValue;
+};
+
+//处理鼠标按下
+const handleSliderDragStart = (property, display) => {
+    
+    dragDisplayId = display.id;
+    dragStartProps = capturePropsSnapshot(display);
+    console.log(dragStartProps) 
+    uiStore.setFloatingParamDragging(true); 
+    console.log('--- Drag Start (快照捕获) ---'); 
+};
+//处理鼠标拖拽
+const handleSliderInput = (property, value) => {
+    if (!selectedObject.value) return;
+    const currentDisplay = selectedObject.value;
+    const props = {};
+    
+    // 检查是否为图片元素
+    const isPicture = currentDisplay.imageUrl !== undefined;
+    
+    if (currentDisplay._shape && currentDisplay._shape.type === 'text') {
+        props[property] = value;
+        if (property === 'font-size' || property === 'font-family' || property === 'color' || property === 'background') {
+             updateTextProperty(property, value, { record: false }); 
+        } else {
+             updateTextContent(value, { record: false });
+        }
+        
+    } else if (isPicture) {
+        // 图片元素处理
+        if (property === 'scale') {
+            const scaleValue = Number(value);
+            props.scale = { x: scaleValue, y: scaleValue };
+            imageScale.value = scaleValue;
+            // 实时应用缩放变化
+            canvasStore.renderer.applyShapeChange(currentDisplay, props);
+        } else if (property === 'filters') {
+            // 实时应用滤镜变化
+            props.filters = value;
+            imageFilter.value = value;
+            canvasStore.renderer.applyShapeChange(currentDisplay, props);
+        }
+    } else if (currentDisplay._shape) {
+        props[property] = value;
+        canvasStore.renderer.applyShapeChange(currentDisplay, props);
+    }
+    
+    switch(property){
+      case 'width':
+        shapeWidth.value = value;
+        break;
+      case 'height':
+        shapeHeight.value = value;
+        break;
+      case 'radius':
+        radius.value = value;
+        break;
+      case 'size': 
+        triangleSize.value = value;
+        break;
+      case 'border-width':
+        borderWidth.value = value;
+        break;
+      case 'opacity':
+        opacity.value = value;
+        break;
+      case 'font-size':
+        fontSize.value = value;
+        break; 
+      case 'background':
+        background.value = value;
+        break;
+      case 'border-color' :
+        borderColor.value = value;
+        break;
+      case 'color' :
+        color.value = value;
+        break;
+    }
+};
+
+//处理鼠标结束拖拽
+const handleSliderDragEnd = (property, value) => {
+    const currentDisplay = selectedObject.value;
+    uiStore.setFloatingParamDragging(false); 
+    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+        dragStartProps = null;
+        dragDisplayId = null;
+        return;
+    }
+    
+    // 确保最终值已应用
+    const props = {};
+    props[property] = value;
+    canvasStore.renderer.applyShapeChange(currentDisplay, props);
+    const displayId = currentDisplay.id;
+    const finalProps = capturePropsSnapshot(currentDisplay);
+    const startPropsForHistory = dragStartProps;
+    
+    // 获取元素类型用于历史记录
+    const elementType = currentDisplay.imageUrl !== undefined ? 'picture' : (currentDisplay._shape?.type || currentDisplay.type || 'unknown');
+    
+    // 记录合并的历史操作
+    if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
+        historyStore.recordAction({
+            type: `slide_change_${elementType}`,
+            undo: () => {
+              const activeObj = canvasStore.getObjectById(displayId);
+              if(activeObj){
+                canvasStore.renderer.updateShape(activeObj, startPropsForHistory)
+              }
+            },
+            
+            redo: () => {
+              const activeObj = canvasStore.getObjectById(displayId)
+              if(activeObj){
+                canvasStore.renderer.updateShape(activeObj, finalProps)
+              }
+            }
+          });
+        console.log('--- Drag End (合并历史记录) ---'); // 检查点
+        console.log(finalProps)
+    }
+
+    // 重置状态
+    dragStartProps = null;
+    dragDisplayId = null;
+};
+
+//文本处理开始
+const handleTextEditStart = (display) => {
+    
+    textDisplayId = display.id;
+    
+    textStartProps = capturePropsSnapshot(display); 
+    
+    console.log('--- Text Edit Start (捕获旧文本快照) ---');
+    
+    console.log(dragStartProps)
+}
+//实时文本更新
+// const handleTextInput = (value) => {
+//     if (!selectedObject.value || selectedObject.value._shape.type !== 'text') return
+//     const currentDisplay = selectedObject.value
+//     updateTextContent(value)
+//     updateTextProperty(value) 
+//     textContent.value = value
+// };
+//捕获新的文本快照
+const handleTextEditEnd = (newValue) => {
+    const currentDisplay = selectedObject.value;
+    
+
+    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+        dragStartProps = null;
+        dragDisplayId = null;
+        return;
+    }
+    const finalProps = capturePropsSnapshot(currentDisplay);
+    finalProps.text = newValue; 
+    const startPropsForHistory = textStartProps;
+    if (startPropsForHistory.text !== finalProps.text) {
+        
+        const displayId = currentDisplay.id; 
+        
+        historyStore.recordAction({
+            type: `text_content_change`,
+            undo: () => canvasStore.renderer.updateShape(
+                canvasStore.getObjectById(displayId), 
+                { text: startPropsForHistory.text }
+            ),
+            redo: () => canvasStore.renderer.updateShape(
+                canvasStore.getObjectById(displayId), 
+                { text: finalProps.text }
+            ),
+        });
+        console.log('--- Text Edit End (合并文本输入历史记录) ---');
+        console.log({ oldValue: startPropsForHistory.text, newValue: finalProps.text });
+    }
+    textStartProps = null;
+    textDisplayId = null;
+};
+
+
+// 图片滤镜
+const imageFilter = ref('none');
+// 图片缩放
+const imageScale = ref(1);
+
 const updatePropertiesFromObject = (obj) => {
-  if (obj._shape.type === 'text') {
+  if ((obj._shape?.type || obj.type) === 'text') {
     // 更新文本属性
     textContent.value = obj.text || ''
     fontFamily.value = obj.style.fontFamily || 'Arial'
@@ -245,25 +528,105 @@ const updatePropertiesFromObject = (obj) => {
     italic.value = obj.style.fontStyle === 'italic'
     underline.value = obj.style.underline || false
     lineThrough.value = obj.style.lineThrough || false
+  } else if (obj.imageUrl !== undefined) {
+    // 更新图片属性
+    imageFilter.value = obj.rawFilters || 'none'
+    imageScale.value = obj.scale?.x || 1
   } else {
     // 更新图形属性
     const style = obj._style || {}
     background.value = style.background || '#42b983'
     borderWidth.value = style.borderWidth || 2
-    borderColor.value = style.borderColor || '#333'
+    borderColor.value = style.borderColor || '#333333'
     opacity.value = obj.alpha || 1
     
     // 根据图形类型更新尺寸属性
-    if (obj._shape.type === 'rect') {
+    if (obj._shape && obj._shape.type === 'rect') {
       shapeWidth.value = obj._shape.width || 100
       shapeHeight.value = obj._shape.height || 100
-    } else if (obj._shape.type === 'circle') {
+    } else if (obj._shape && obj._shape.type === 'circle') {
       radius.value = obj._shape.radius || 50
-    } else if (obj._shape.type === 'triangle') {
+    } else if (obj._shape && obj._shape.type === 'triangle') {
       triangleSize.value = obj._shape.size || 100
     }
   }
 }
+
+// 处理图片缩放输入
+const handleImageScaleChange = (value) => {
+  const scaleValue = Number(value)
+  imageScale.value = scaleValue
+  if (selectedObject.value && selectedObject.value.imageUrl !== undefined) {
+    const currentDisplay = selectedObject.value
+    updatePictureProperty('scale', { x: scaleValue, y: scaleValue })
+  }
+}
+
+// 处理滤镜变化
+const handleFilterChange = (value) => {
+  updatePictureProperty('filters', value)
+  handleSliderDragEnd('filters', value)
+}
+
+// 更新图片属性
+const updatePictureProperty = (property, value) => {
+  if (selectedObject.value && selectedObject.value.imageUrl !== undefined) {
+    const props = {}
+    const currentDisplay = selectedObject.value
+    props[property] = value
+    canvasStore.renderer.updateShape(currentDisplay, props)
+    // 更新本地状态
+    if (property === 'filters') imageFilter.value = value
+    if (property === 'scale') imageScale.value = value.x
+  }
+}
+
+//捕获当前对象属性
+const capturePropsSnapshot = (display) => {
+    if (!display) return {};
+    
+    // 检查是否为图片元素
+    const isPicture = display.imageUrl !== undefined;
+    
+    if (isPicture) {
+        // 图片元素属性快照
+        return {
+            filters: display.rawFilters || 'none',
+            scale: { x: display.scale.x, y: display.scale.y },
+            opacity: display.alpha
+        };
+    } else if (display._shape) {
+        // 常规形状或文本元素属性快照
+        const shape = display._shape;
+        const style = display._style || {};
+        
+        return {
+            // 几何属性
+            width: shape.width,
+            height: shape.height,
+            radius: shape.radius,
+            size: shape.size,
+            text: display.text, 
+
+            // 样式属性 (来自 _style)
+            background: style.background,
+            'border-width': style.borderWidth,
+            'border-color': style.borderColor,
+            opacity: display.alpha,
+            
+            // 文本样式属性 (来自 display.style)
+            'font-family': display.style?.fontFamily,
+            'font-size': display.style?.fontSize,
+            color: display.style?.fill,
+            bold: display.style?.fontWeight === 'bold',
+            italic: display.style?.fontStyle === 'italic',
+            underline: display.style?.underline,
+            lineThrough: display.style?.lineThrough
+        };
+    }
+    
+    return {};
+};
 
 // 监听选中对象变化，更新属性值
 watch(() => canvasStore.selectedObject, (newObj) => {
@@ -275,14 +638,14 @@ watch(() => canvasStore.selectedObject, (newObj) => {
 
 // 更新文本内容
 const updateTextContent = (value) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
     canvasStore.renderer.updateShape(selectedObject.value, { text: value })
   }
 }
 
 // 更新文本属性
 const updateTextProperty = (property, value) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
     const props = {}
     props[property] = value
     canvasStore.renderer.updateShape(selectedObject.value, props)
@@ -297,31 +660,44 @@ const updateTextProperty = (property, value) => {
 
 // 切换文本样式属性
 const toggleTextProperty = (property) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
-    const currentValue = property === 'bold' ? bold.value : 
-                        property === 'italic' ? italic.value :
-                        property === 'underline' ? underline.value :
-                        lineThrough.value
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
+    const display = selectedObject.value;
+        let currentState;
+        if (property === 'bold') {
+            currentState = display.style.fontWeight === 'bold';
+        } else if (property === 'italic') {
+            currentState = display.style.fontStyle === 'italic';
+        } else if (property === 'underline') {
+            currentState = !!display.style.underline;
+        } else if (property === 'lineThrough') {
+            currentState = !!display.style.lineThrough;
+        } else {
+            return;
+        }
+    // const currentValue = property === 'bold' ? bold.value : 
+    //                     property === 'italic' ? italic.value :
+    //                     property === 'underline' ? underline.value :
+    //                     lineThrough.value
     
-    const props = {}
-    props[property] = !currentValue
-    canvasStore.renderer.updateShape(selectedObject.value, props)
+    // const props = {}
+    // props[property] = !currentValue
+    const newValue = recordToggleAction(display, property, currentState);
     
     // 更新本地状态
-    if (property === 'bold') bold.value = !currentValue
-    if (property === 'italic') italic.value = !currentValue
-    if (property === 'underline') underline.value = !currentValue
-    if (property === 'lineThrough') lineThrough.value = !currentValue
+    if (property === 'bold') bold.value = newValue
+    if (property === 'italic') italic.value = newValue
+    if (property === 'underline') underline.value = newValue
+    if (property === 'lineThrough') lineThrough.value = newValue
   }
 }
 
 // 更新图形属性
 const updateShapeProperty = (property, value) => {
-  if (selectedObject.value && selectedObject.value._shape.type !== 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type !== 'text' && !selectedObject.value.imageUrl) {
     const props = {}
+    const currentDisplay = selectedObject.value;
     props[property] = value
-    canvasStore.renderer.updateShape(selectedObject.value, props)
-    
+    canvasStore.renderer.updateShape(currentDisplay, props);
     // 更新本地状态
     if (property === 'width') shapeWidth.value = value
     if (property === 'height') shapeHeight.value = value
@@ -338,6 +714,8 @@ const updateShapeProperty = (property, value) => {
 const closeFloatingPanel = () => {
   canvasStore.setSelected(null)
 }
+
+
 </script>
 
 <style scoped>

@@ -5,6 +5,7 @@ import path from 'path'; // 需引入path模块
 
 export default defineConfig({
   plugins: [vue()],
+  base: './',
   // 修复pnpm硬链接解析问题
   resolve: {
     preserveSymlinks: true, // 关键：支持pnpm的符号链接

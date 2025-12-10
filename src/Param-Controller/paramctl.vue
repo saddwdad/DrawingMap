@@ -92,6 +92,28 @@
         />
       </div>
     </template>
+    <template v-else-if="canvasStore.currentTool === 'picture'">
+      <div class="param-item">
+        <label class="param-label">上传图片</label>
+        <input type="file" accept="image/*" @change="onImageFileChange">
+      </div>
+      <div class="param-item">
+        <label class="param-label">滤镜</label>
+        <div class="bius-group">
+          <button class="toggle-btn" :class="{ active: canvasStore.currentImageFilter === 'none' }" @click="canvasStore.setCurrentImageFilter('none')">无</button>
+          <button class="toggle-btn" :class="{ active: canvasStore.currentImageFilter === 'green' }" @click="canvasStore.setCurrentImageFilter('green')">绿色</button>
+          <button class="toggle-btn" :class="{ active: canvasStore.currentImageFilter === 'warm' }" @click="canvasStore.setCurrentImageFilter('warm')">暖色</button>
+          <button class="toggle-btn" :class="{ active: canvasStore.currentImageFilter === 'cool' }" @click="canvasStore.setCurrentImageFilter('cool')">冷色</button>
+        </div>
+      </div>
+      <div class="param-item">
+        <label class="param-label">图像大小</label>
+        <div class="slider-group">
+          <input type="range" class="param-slider" min="0.1" max="3" step="0.1" :value="canvasStore.currentImageScale" @input="canvasStore.setCurrentImageScale(Number($event.target.value))">
+          <span class="slider-value">{{ Math.round(canvasStore.currentImageScale * 100) }}%</span>
+        </div>
+      </div>
+    </template>
     <template v-else>
       <!-- 颜色选择 -->
       <div class="param-item">
@@ -148,6 +170,21 @@
           >
           <span class="slider-value">{{ canvasStore.currentBorderWidth }}px</span>
         </div>
+      </div >
+      <!-- 边框宽度设置 -->
+      <div class="param-item">
+        <label class="param-label">边框宽度</label>
+        <div class="slider-group">
+          <input 
+            type="range" 
+            class="param-slider" 
+            min="1" 
+            max="20" 
+            :value="canvasStore.currentBorderWidth"
+            @input="canvasStore.setCurrentBorderWidth(Number($event.target.value))"
+          >
+          <span class="slider-value">{{ canvasStore.currentBorderWidth }}px</span>
+        </div>
       </div>
       <!-- 边框颜色选择 -->
       <div class="param-item">
@@ -171,7 +208,7 @@
 <script setup>
 
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
-const canvasStore = useCanvasStore()
+  const canvasStore = useCanvasStore()
 
 // 应用参数（当前实现中参数是实时生效的，此按钮可用于未来扩展）
 const applyParams = () => {
@@ -187,6 +224,21 @@ const resetParams = () => {
   canvasStore.setCurrentBorderColor('#333')
   canvasStore.setCurrentOpacity(1)
   canvasStore.resetTextProperties()
+  canvasStore.setCurrentImageScale(1)
+  canvasStore.setCurrentImageFilter('none')
+}
+
+const onImageFileChange = (event) => {
+  const file = event.target.files && event.target.files[0]
+  if (!file) return
+  if (!file.type || !file.type.startsWith('image/')) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const imageUrl = e.target?.result
+    if (imageUrl) canvasStore.setCurrentImageUrl(imageUrl)
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
 }
 </script>
 
@@ -342,3 +394,4 @@ const resetParams = () => {
   font-size: 12px;
 }
 </style>
+

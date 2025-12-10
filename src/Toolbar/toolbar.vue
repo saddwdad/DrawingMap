@@ -71,8 +71,7 @@ const handleToolClick = (toolType, e) => {
   } else if (toolType === 'reset') {
     canvasStore.resetCanvas()
   } else if (toolType === 'picture') {
-    // 触发文件选择对话框
-    document.dispatchEvent(new CustomEvent('triggerFileInput'));
+    
   } else if (toolType === 'rect' || toolType === 'circle' || toolType === 'triangle') {
     canvasStore.preparePending(toolType)
   } else if (toolType === 'pen') {
@@ -127,3 +126,4 @@ const handleToolClick = (toolType, e) => {
   vertical-align: middle;
 }
 </style>
+
