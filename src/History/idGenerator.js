@@ -7,6 +7,5 @@ let uniqueIdCounter = 0;
  */
 export function nextUniqueId() {
     uniqueIdCounter++;
-    // 使用时间戳和随机数提高唯一性，但对您的场景，递增计数器就足够了
     return Date.now() + uniqueIdCounter; 
 }

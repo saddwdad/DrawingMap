@@ -126,3 +126,4 @@ const handleToolClick = (toolType, e) => {
   vertical-align: middle;
 }
 </style>
+

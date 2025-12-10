@@ -16,7 +16,7 @@
           :icon="createVNode(SaveOutlined)"
           @click = "saveToIndexDB()"
           >保存</a-button>
-          <a-button type="default" shape="round" :icon="createVNode(ShareAltOutlined)" style="margin-left: 8px;">分享</a-button>
+          <shareButton/>
         </div>
       </div>
     </a-layout-header>
@@ -32,7 +32,7 @@
       <!-- 浮动参数面板 -->
       
       <div class="floating-param">
-        <paramctl />
+        <paramctl /> 
         <!-- 新增：画布控制按钮（测试缩放/重置） -->
         <div class="canvas-control">
           <p>当前缩放：{{ canvasStore.scalePercent }}</p>
@@ -49,7 +49,7 @@
            @contextmenu.prevent = "handleCanvasContextMenu"
            :style="{cursor: getCursorStyle()}">
         <!-- 画布内容（可缩放、可拖动，样式由pixi管理） -->
-        <canvas id="pixi-mount" ref="pixiMountRef"></canvas>
+        <canvas id="pixi-mount" ref="pixiMountRef" class="pixi-canvas"></canvas>
         <!-- 隐藏的文件输入框，用于图片上传 -->
         <input 
           type="file" 
@@ -62,13 +62,18 @@
           <minimap ref="minimapRef" />
         </div>
         <contextMenu/>
+        <!-- 浮动参数控制栏 -->
+      <div v-if="canvasStore.selectedObject" ref="floatingParamRef" class="floating-toolbar floating-param-container" :style="uiStore.floatingParamStyle">
+        <div class="drag-handle">🖐️ 拖动</div>
+        <floatingParamctl />
+      </div>
       </div>
 
     </a-layout-content>
 
     <!-- 底部页脚 -->
     <a-layout-footer class="main-footer">
-      ©2025 Pixi + Vue + Ant Design Vue 画布编辑器 | 纯UI版
+      ©2025 Pixi + Vue + Ant Design Vue 画布编辑器 
     </a-layout-footer>
   </a-layout>
 </template>
@@ -83,6 +88,7 @@ import { faPalette } from '@fortawesome/free-solid-svg-icons'
 import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
+import floatingParamctl from '@/Param-Controller/floating-paramctl.vue'
 import * as PIXI from 'pixi.js'
 // 引入AntD图标
 import { SaveOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
@@ -93,15 +99,21 @@ import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { Renderer } from '@/renderer/Renderer'
 import { useContextMenuStore } from './contextMenu/contextMenu'
 import contextMenu from './contextMenu/contextMenu.vue'
+import shareButton from '@/shareUtils/shareButton.vue'
 import { context } from 'ant-design-vue/es/vc-image/src/PreviewGroup'
 //引入持久化存储
 import { CanvasCache } from '@/LocalStorage/localCache'
 import { message } from 'ant-design-vue'
 import { useHistoryStore } from '@/History/History'
 
+//引入分享相关函数
+
+import { triggerFileDownload } from '@/shareUtils/share'
+
 const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)
 const toolbarRef = ref(null)
+const floatingParamRef = ref(null)
 const fileInputRef = ref(null)
 const minimapRef = ref(null)
 let resizeObserver = null
@@ -134,6 +146,7 @@ const {
     endDrag,
     isDragging
 } = canvasStore
+
 // 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
 const isErasing = ref(false)
 const objects = computed(() => canvasStore.renderer?.objects || [])
@@ -153,6 +166,7 @@ const resizePixi = () => {
     updatePixiViewport();
 }
 
+
 // 初始化Pixi应用
 const initPixi = async () => {
   if (!canvasContainerRef.value || !pixiMountRef.value) return
@@ -161,6 +175,7 @@ const initPixi = async () => {
   // 1. 创建 Pixi 应用
   canvasStore.initViewportSize(width,height)
   app = new PIXI.Application();
+
   await app.init(
     {
     width: width,
@@ -171,6 +186,42 @@ const initPixi = async () => {
     autoDensity: true
   }
 )
+    
+  // 手动启用Pixi事件系统
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
+  
+  // 确保Pixi应用的事件系统已启用
+  if (app.renderer.events) {
+    app.renderer.events.domElement = pixiMountRef.value;
+  }
+  
+  // 调试：检查Pixi事件系统是否启用
+  console.log('Pixi事件系统状态:', {
+    stageEventMode: app.stage.eventMode,
+    stageHitArea: app.stage.hitArea,
+    appRenderer: !!app.renderer,
+    appScreen: app.screen,
+    hasEventsSystem: !!app.renderer.events
+  });  
+
+  // 手动启用Pixi事件系统
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
+  
+  // 确保Pixi应用的事件系统已启用
+  if (app.renderer.events) {
+    app.renderer.events.domElement = pixiMountRef.value;
+  }
+  
+  // 调试：检查Pixi事件系统是否启用
+  console.log('Pixi事件系统状态:', {
+    stageEventMode: app.stage.eventMode,
+    stageHitArea: app.stage.hitArea,
+    appRenderer: !!app.renderer,
+    appScreen: app.screen,
+    hasEventsSystem: !!app.renderer.events
+  });
   // 2. 创建根容器（作为视角容器，所有内容都放在这个容器里）
   stage = new PIXI.Container()
   app.stage.addChild(stage)
@@ -188,6 +239,8 @@ const initPixi = async () => {
 
   // 5. 初始化渲染器并设置到store，直接使用stage作为绘制容器
   renderer = new Renderer(stage);
+  // 初始化画布事件监听器（用于框选功能），传入app.stage作为参数
+  
   canvasStore.setRenderer(renderer);
 
   await nextTick()
@@ -197,10 +250,14 @@ const initPixi = async () => {
     minimapApp = await minimapRef.value.initMiniMap()
   }
 
-  // 6. 添加鼠标点击事件处理
-  // 使用更可靠的方式：直接在canvas元素上绑定点击事件
+
   const canvas = pixiMountRef.value;
+  // 为canvas添加点击事件监听器，但选择工具时让Pixi处理
   canvas.addEventListener('click', handleCanvasClick);
+
+  // 7. 初始化工具栏和浮动参数面板的拖动
+  uiStore.initToolbarDrag(toolbarRef.value);
+  uiStore.initFloatingParamDrag(floatingParamRef.value);
 
   watch(
     viewport,
@@ -225,12 +282,11 @@ const initPixi = async () => {
 
 // 处理画布点击事件
 const handleCanvasClick = (event) => {
-  // 阻止事件冒泡，避免与画布拖动事件冲突
-  event.stopPropagation();
-  
   // 获取当前工具
   const currentTool = canvasStore.currentTool;
   console.log('handleCanvasClick触发，当前工具:', currentTool);
+  
+
   
   // 获取画布容器的实际尺寸
   const rect = pixiMountRef.value.getBoundingClientRect();
@@ -256,10 +312,10 @@ const handleCanvasClick = (event) => {
     }
     return
   }
-  // 选择工具：仅用于点击对象选中，不在画布空白处执行绘制
-  if (currentTool === 'select') {
-    return
-  }
+  
+  // 对于其他工具，阻止事件冒泡，避免与画布拖动事件冲突
+  event.stopPropagation();
+  
   if (currentTool === 'pen') {
     // 文本工具：使用面板文本内容直接放置
     canvasStore.preparePendingText(canvasStore.currentTextContent)
@@ -271,10 +327,15 @@ const handleCanvasClick = (event) => {
 
 // 处理鼠标按下事件 - 区分左键和右键
 const handleMouseDown = (e) => {
-  // 右键按下（按钮值为2）时，开始拖动画布
-  if (e.button === 1 ) {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select' && e.button === 0) {
+    console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
+    return;
+  }
+  
+  // 中键按下（按钮值为1）时，开始拖动画布
+  if (e.button === 1) {
     // 阻止默认右键菜单
-    e.preventDefault();
     startDrag(e);
     contextMenuStore.hideMenu()
   }
@@ -290,15 +351,18 @@ const handleMouseDown = (e) => {
     const mouseY = e.clientY - rect.top;
     const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
     canvasStore.eraseAt(x, y)
-    
   }
-
-
 }
 
 // 处理鼠标移动事件
   let dragDebounceTimer = null;
   const handleMouseMove = (e) => {
+    // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+    if (canvasStore.currentTool === 'select' && e.buttons === 1) {
+      console.log('选择工具激活，跳过DOM mousemove处理，让Pixi框选功能执行');
+      return;
+    }
+    
     clearTimeout(dragDebounceTimer);
   dragDebounceTimer = setTimeout(() =>{
     if (canvasStore.isDragging) {
@@ -328,6 +392,12 @@ const handleMouseDown = (e) => {
 
 // 处理鼠标释放事件
 const handleMouseUp = (e) => {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select' && e.button === 0) {
+    console.log('选择工具激活，跳过DOM mouseup处理，让Pixi框选功能执行');
+    return;
+  }
+  
   endDrag(e);
   // 结束擦除
   isErasing.value = false
@@ -335,6 +405,12 @@ const handleMouseUp = (e) => {
 
 // 处理鼠标离开事件
 const handleMouseLeave = (e) => {
+  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+  if (canvasStore.currentTool === 'select' && e.buttons === 1) {
+    console.log('选择工具激活，跳过DOM mouseleave处理，让Pixi框选功能执行');
+    return;
+  }
+  
   endDrag(e);
   // 离开画布时结束擦除
   isErasing.value = false
@@ -430,6 +506,7 @@ const drawInfiniteGrid = (container) => {
   const gridSize = 50 // 网格间距
   const gridColor = 0xffffff // 网格颜色
   const maxRange = 10000 // 真正无限（可设为较大值优化性能，如100000）
+
   const thinLineStyle = {
     width: 1, 
     color: gridColor,
@@ -464,6 +541,7 @@ const drawInfiniteGrid = (container) => {
 }
 
 
+// 处理鼠标滚轮缩放事件
 // 处理鼠标滚轮缩放事件
 const handleScale = (e) => {
   const delta = e.deltaY > 0 ? -canvasStore.scalestep : canvasStore.scalestep
@@ -546,6 +624,29 @@ function handleKeyDown(event) {
 
 watch(canvasStore.viewport, updatePixiViewport, { deep: true })
 
+// 监听选中对象变化，重新初始化浮动参数控制栏拖动
+watch(() => canvasStore.selectedObject, (newObj) => {
+  // 当有选中对象时，等待DOM更新后初始化拖动
+  if (newObj) {
+    nextTick(() => {
+      if (floatingParamRef.value) {
+        // 先销毁之前的事件监听器
+        if (uiStore.destroyFloatingParamDrag) {
+          uiStore.destroyFloatingParamDrag();
+        }
+        // 重新初始化拖动
+        uiStore.destroyFloatingParamDrag = uiStore.initFloatingParamDrag(floatingParamRef.value);
+      }
+    });
+  } else {
+    // 当没有选中对象时，销毁拖动事件监听器
+    if (uiStore.destroyFloatingParamDrag) {
+      uiStore.destroyFloatingParamDrag();
+      uiStore.destroyFloatingParamDrag = null;
+    }
+  }
+})
+
 // 组件生命周期
 onMounted(async () => {
   await initPixi()
@@ -563,15 +664,28 @@ onMounted(async () => {
     // 调用 Store 的 Action，并将返回的销毁函数保存起来
     uiStore.destroyToolbarDrag = uiStore.initToolbarDrag(toolbarRef.value);
   }
-  // 不再直接绑定拖拽事件，使用模板中的事件绑定
+  
+  // 初始化浮动参数控制栏拖动（如果已有选中对象）
+  if (canvasStore.selectedObject && floatingParamRef.value) {
+    uiStore.destroyFloatingParamDrag = uiStore.initFloatingParamDrag(floatingParamRef.value);
+  }
   
   // 监听图片工具点击事件
   document.addEventListener('triggerFileInput', triggerFileInput);
   document.addEventListener('keydown', handleKeyDown)
+
+
+  renderer.initCanvasEvents(app.stage);
 })
 
 onUnmounted(() => {
   // 销毁 Pixi 实例
+  clearTimeout(dragDebounceTimer);
+
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   clearTimeout(dragDebounceTimer);
 
   if (resizeObserver) {
@@ -587,6 +701,10 @@ onUnmounted(() => {
   if (uiStore.destroyToolbarDrag) {
     uiStore.destroyToolbarDrag();
   }
+  // 销毁浮动参数控制栏拖动事件监听器
+  if (uiStore.destroyFloatingParamDrag) {
+    uiStore.destroyFloatingParamDrag();
+  }
   // 移除canvas上的点击事件监听器
   const canvas = pixiMountRef.value;
   if (canvas) {
@@ -599,8 +717,14 @@ onUnmounted(() => {
   // 移除图片工具事件监听器
   document.removeEventListener('triggerFileInput', triggerFileInput);
   document.removeEventListener('keydown', handleKeyDown)
-
 })
+
+
+
+
+
+
+
 
 
 
@@ -616,12 +740,20 @@ const FaPalette = defineComponent({
 })
 
 function handleCanvasContextMenu(e){
+  console.log('执行调用菜单')
   contextMenuStore.showMenu(e.clientX, e.clientY);
 }
 
 </script>
 
 <style scoped>
+
+.floating-minimap {
+  position: absolute;
+  top: 20px;
+  right: 240px; /* 与参数面板保持20px间距 */
+  z-index: 90;
+}
 
 .floating-minimap {
   position: absolute;
@@ -983,4 +1115,37 @@ function handleCanvasContextMenu(e){
   background: #fff;
   border-top: 1px solid #f0f0f0;
 } */
+
+/* 浮动工具栏样式 */
+.floating-toolbar {
+  position: absolute;
+  z-index: 90;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+}
+
+/* 拖动把手样式 */
+.drag-handle {
+  padding: 4px 8px;
+  background: #1890ff;
+  color: #fff;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+/* 浮动参数容器样式 */
+.floating-param-container {
+  width: 220px;
+}
+
+/* 浮动参数内容样式 */
+.floating-param-content {
+  width: 100%;
+}
 </style>
+

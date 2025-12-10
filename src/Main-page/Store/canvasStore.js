@@ -16,9 +16,12 @@ export const useCanvasStore = defineStore('canvas', {
     dragStart: { x: 0, y: 0 },
     dragRafId: null,
     lastDragDelta: { dx: 0, dy: 0 },
+    dragRafId: null,
+    lastDragDelta: { dx: 0, dy: 0 },
     bgColor: '#1a1a1a', // 内容背景色
     borderColor: '#333', // 内容边框色
     scalestep: 0.1,
+    scaleLimits: { min: 0.1, max: 10 },
     scaleLimits: { min: 0.1, max: 10 },
     minimap: {
       scale: 0.1,
@@ -27,11 +30,11 @@ export const useCanvasStore = defineStore('canvas', {
     objects: [],
     // 渲染相关状态
     renderer: null,
-    currentTool: 'pen',
+    currentTool: 'select',
     currentColor: '#ffffff', // 初始颜色设置为白色
     currentSize: 100,
     currentBorderWidth: 2,
-    currentBorderColor: '#333',
+    currentBorderColor: '#333333',
     currentOpacity: 1,
     // 文本相关状态
     currentFontFamily: 'Arial',
@@ -57,6 +60,8 @@ export const useCanvasStore = defineStore('canvas', {
     currentTextContent: '',
     //跟踪绘制对象
     objects: [],
+
+     
   }),
   getters: {
 
@@ -203,6 +208,7 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
+    scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
     // 设置渲染器
@@ -237,16 +243,18 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     // 开始拖动
+    // 开始拖动
     startDrag(e) {
-      // 现在只通过右键拖动，所以不需要检查目标元素
-      // 直接设置拖动状态
+
       this.isDragging = true
       this.dragStart = { x: e.clientX, y: e.clientY }
       this.lastDragDelta = { dx: 0, dy: 0 }
     },
 
     // 拖动视口
+    // 拖动视口
     dragViewport(e) {
+      if (!this.isDragging) return
       if (!this.isDragging) return
       const dx = (e.clientX - this.dragStart.x) / this.viewport.scale
       const dy = (e.clientY - this.dragStart.y) / this.viewport.scale
@@ -260,7 +268,18 @@ export const useCanvasStore = defineStore('canvas', {
           this.dragRafId = null
         })
       }
+      this.dragStart = { x: e.clientX, y: e.clientY }
+      this.lastDragDelta = { dx, dy }
+      if (!this.dragRafId) {
+        this.dragRafId = requestAnimationFrame(() => {
+          const { dx: rdx, dy: rdy } = this.lastDragDelta
+          this.viewport.x -= rdx
+          this.viewport.y -= rdy
+          this.dragRafId = null
+        })
+      }
     },
+
 
     // 结束拖动
     endDrag() {
@@ -458,31 +477,6 @@ export const useCanvasStore = defineStore('canvas', {
                 canvasThis.pendingItem = null;
                 canvasThis.renderer.render && canvasThis.renderer.render();
               }
-            //   const recreatedObjects = await canvasThis.reconstructItem(originalData)
-
-            //   if(recreatedObjects){
-            //     canvasThis.objects.push(recreatedObjects)
-                
-            //     if(recreatedObjects.position){
-            //       recreatedObjects.position.set(originalData.x, originalData.y)
-            //       const stage = canvasThis.renderer.stage;
-            //       if (stage && stage.updateTransform) {
-            //     // 【核心修复】强制 Stage 的 World Transform 立即生效
-            //     // 这次我们不直接调用 updateTransform，而是调用 updateTransform() 的包装函数（如果有）。
-            //     // 如果没有，直接调用 updateTransform 是可以接受的，但需要确保 Stage 是健康的。
-            //     // 鉴于您之前 updateTransform 失败，我们相信渲染器能在 render 时处理。
-                
-            //     // 针对您的问题，最常见的解决方案是确保父级和祖父级的缓存被清除：
-            //       if (recreatedObjects.parent && recreatedObjects.parent.parent) {
-            //           // 假设父级的父级是 Viewport/World 容器，强制更新它
-            //           // 这相当于手动触发了缩放操作中的 World 矩阵更新
-            //           recreatedObjects.parent.parent.updateTransform(); 
-            //       }
-            //    }
-            //   }
-            // canvasThis.renderer.render && canvasThis.renderer.render();
-
-            // }
 
               canvasThis.cleanupObjects(); // 执行清理
             }
