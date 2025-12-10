@@ -258,6 +258,9 @@ const opacity = ref(1)
 //拖动属性
 let dragStartProps = null; 
 let dragDisplayId = null;
+//文本属性
+let textStartProps = null;
+let textDisplayId = null;
 
 //记录BIUS
 const recordToggleAction = (display, property, currentValue) => {
@@ -390,9 +393,9 @@ const handleSliderDragEnd = (property, value) => {
 //文本处理开始
 const handleTextEditStart = (display) => {
     
-    dragDisplayId = display.id;
+    textDisplayId = display.id;
     
-    dragStartProps = capturePropsSnapshot(display); 
+    textStartProps = capturePropsSnapshot(display); 
     
     console.log('--- Text Edit Start (捕获旧文本快照) ---');
     
@@ -418,7 +421,7 @@ const handleTextEditEnd = (newValue) => {
     }
     const finalProps = capturePropsSnapshot(currentDisplay);
     finalProps.text = newValue; 
-    const startPropsForHistory = dragStartProps;
+    const startPropsForHistory = textStartProps;
     if (startPropsForHistory.text !== finalProps.text) {
         
         const displayId = currentDisplay.id; 
@@ -437,8 +440,8 @@ const handleTextEditEnd = (newValue) => {
         console.log('--- Text Edit End (合并文本输入历史记录) ---');
         console.log({ oldValue: startPropsForHistory.text, newValue: finalProps.text });
     }
-    dragStartProps = null;
-    dragDisplayId = null;
+    textStartProps = null;
+    textDisplayId = null;
 };
 
 
