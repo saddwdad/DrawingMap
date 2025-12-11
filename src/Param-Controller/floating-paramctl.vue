@@ -349,11 +349,8 @@ const handleSliderInput = (property, value) => {
     
     if (currentDisplay._shape && currentDisplay._shape.type === 'text') {
         props[property] = value;
-        if (property === 'font-size' || property === 'font-family' || property === 'color' || property === 'background') {
-             updateTextProperty(property, value, { record: false }); 
-        } else {
-             updateTextContent(value, { record: false });
-        }
+        // 实时应用文本属性变化
+        canvasStore.renderer.applyShapeChange(currentDisplay, props);
         
     } else if (isPicture) {
         // 图片元素处理
@@ -520,14 +517,15 @@ const updatePropertiesFromObject = (obj) => {
   if ((obj._shape?.type || obj.type) === 'text') {
     // 更新文本属性
     textContent.value = obj.text || ''
-    fontFamily.value = obj.style.fontFamily || 'Arial'
-    fontSize.value = obj.style.fontSize || 24
-    color.value = obj.style.fill || '#ffffff'
-    background.value = obj.style.backgroundColor || null
-    bold.value = obj.style.fontWeight === 'bold'
-    italic.value = obj.style.fontStyle === 'italic'
-    underline.value = obj.style.underline || false
-    lineThrough.value = obj.style.lineThrough || false
+    const textStyle = obj.style || {}
+    fontFamily.value = textStyle.fontFamily || 'Arial'
+    fontSize.value = textStyle.fontSize || 24
+    color.value = textStyle.fill || '#ffffff'
+    background.value = textStyle.backgroundColor || null
+    bold.value = textStyle.fontWeight === 'bold'
+    italic.value = textStyle.fontStyle === 'italic'
+    underline.value = textStyle.underline || false
+    lineThrough.value = textStyle.lineThrough || false
   } else if (obj.imageUrl !== undefined) {
     // 更新图片属性
     imageFilter.value = obj.rawFilters || 'none'
@@ -565,7 +563,6 @@ const handleImageScaleChange = (value) => {
 // 处理滤镜变化
 const handleFilterChange = (value) => {
   updatePictureProperty('filters', value)
-  handleSliderDragEnd('filters', value)
 }
 
 // 更新图片属性
@@ -662,15 +659,16 @@ const updateTextProperty = (property, value) => {
 const toggleTextProperty = (property) => {
   if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
     const display = selectedObject.value;
+    const textStyle = display.style;
         let currentState;
         if (property === 'bold') {
-            currentState = display.style.fontWeight === 'bold';
+            currentState = textStyle?.fontWeight === 'bold';
         } else if (property === 'italic') {
-            currentState = display.style.fontStyle === 'italic';
+            currentState = textStyle?.fontStyle === 'italic';
         } else if (property === 'underline') {
-            currentState = !!display.style.underline;
+            currentState = !!textStyle?.underline;
         } else if (property === 'lineThrough') {
-            currentState = !!display.style.lineThrough;
+            currentState = !!textStyle?.lineThrough;
         } else {
             return;
         }

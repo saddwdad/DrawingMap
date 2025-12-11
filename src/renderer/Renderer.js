@@ -899,13 +899,15 @@ export class Renderer {
       oldProps['border-color'] = style.borderColor;
       oldProps.opacity = display.alpha;
       
-      oldProps['font-family'] = display.style?.fontFamily;
-      oldProps['font-size'] = display.style?.fontSize;
-      oldProps.color = display.style?.fill;
-      oldProps.bold = display.style?.fontWeight === 'bold';
-      oldProps.italic = display.style?.fontStyle === 'italic';
-      oldProps.underline = display.style?.underline;
-      oldProps.lineThrough = display.style?.lineThrough;
+      // 对于文本元素，样式直接在display.style中
+      const textStyle = display.style;
+      oldProps['font-family'] = textStyle?.fontFamily;
+      oldProps['font-size'] = textStyle?.fontSize;
+      oldProps.color = textStyle?.fill;
+      oldProps.bold = textStyle?.fontWeight === 'bold';
+      oldProps.italic = textStyle?.fontStyle === 'italic';
+      oldProps.underline = textStyle?.underline;
+      oldProps.lineThrough = textStyle?.lineThrough;
     }
 
     // 初始化样式更新对象
@@ -993,15 +995,22 @@ export class Renderer {
         if (typeof props.text === 'string') {
           display.text = props.text;
         }
+        // 对于文本元素，样式直接在display.style中
         const s = display.style;
-        if (props['font-family']) s.fontFamily = props['font-family'];
-        if (props['font-size']) s.fontSize = props['font-size'];
-        if (props.color) s.fill = props.color;
-        if (props.background !== undefined) s.backgroundColor = props.background;
-        if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
-        if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
-        if (props.underline !== undefined) s.underline = !!props.underline;
-        if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+        // 确保s是有效的样式对象
+        if (s) {
+          if (props['font-family']) s.fontFamily = props['font-family'];
+          if (props['font-size']) s.fontSize = props['font-size'];
+          if (props.color) s.fill = props.color;
+          if (props.background !== undefined) s.backgroundColor = props.background;
+          if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
+          if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
+          if (props.underline !== undefined) s.underline = !!props.underline;
+          if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+          
+          // 强制更新文本，确保样式变更立即生效
+          display.updateText();
+        }
       }
     }
     // 更新_style属性（仅适用于非文本、非图片元素）
@@ -1012,6 +1021,11 @@ export class Renderer {
     const updatedStyle = display._style || {};
     // 初始化新属性对象
     const newProps = {};
+    
+    // 强制重新渲染画布，确保属性更改立即显示
+    if (this.app && this.app.renderer) {
+      this.app.renderer.render(this.app.stage);
+    }
     
     // 更新不透明度
     if (props.opacity !== undefined) display.alpha = props.opacity;
@@ -1038,13 +1052,15 @@ export class Renderer {
       newProps['border-color'] = updatedStyle.borderColor;
       newProps.opacity = display.alpha;
       
-      newProps['font-family'] = display.style?.fontFamily;
-      newProps['font-size'] = display.style?.fontSize;
-      newProps.color = display.style?.fill;
-      newProps.bold = display.style?.fontWeight === 'bold';
-      newProps.italic = display.style?.fontStyle === 'italic';
-      newProps.underline = display.style?.underline;
-      newProps.lineThrough = display.style?.lineThrough;
+      // 对于文本元素，样式直接在display.style中
+      const textStyle = display.style;
+      newProps['font-family'] = textStyle?.fontFamily;
+      newProps['font-size'] = textStyle?.fontSize;
+      newProps.color = textStyle?.fill;
+      newProps.bold = textStyle?.fontWeight === 'bold';
+      newProps.italic = textStyle?.fontStyle === 'italic';
+      newProps.underline = textStyle?.underline;
+      newProps.lineThrough = textStyle?.lineThrough;
     }
 
     const shapeType = display._shape ? display._shape.type : 'picture'; // 图片元素没有_shape，所以直接设置为'picture'
@@ -1060,7 +1076,6 @@ export class Renderer {
         }
     }
     if (Object.keys(propsToUndo).length === 0) {
-      console.log('没有找到新对象')
       return;
     }
     
@@ -1103,13 +1118,15 @@ export class Renderer {
       oldProps['border-color'] = style.borderColor;
       oldProps.opacity = display.alpha;
       
-      oldProps['font-family'] = display.style?.fontFamily;
-      oldProps['font-size'] = display.style?.fontSize;
-      oldProps.color = display.style?.fill;
-      oldProps.bold = display.style?.fontWeight === 'bold';
-      oldProps.italic = display.style?.fontStyle === 'italic';
-      oldProps.underline = display.style?.underline;
-      oldProps.lineThrough = display.style?.lineThrough;
+      // 对于文本元素，样式在display.text.style中
+      const textStyle = display.text?.style;
+      oldProps['font-family'] = textStyle?.fontFamily;
+      oldProps['font-size'] = textStyle?.fontSize;
+      oldProps.color = textStyle?.fill;
+      oldProps.bold = textStyle?.fontWeight === 'bold';
+      oldProps.italic = textStyle?.fontStyle === 'italic';
+      oldProps.underline = textStyle?.underline;
+      oldProps.lineThrough = textStyle?.lineThrough;
     }
 
     // 初始化样式更新对象
@@ -1197,15 +1214,21 @@ export class Renderer {
         if (typeof props.text === 'string') {
           display.text = props.text;
         }
+        // 对于文本元素，样式直接在display.style中
         const s = display.style;
-        if (props['font-family']) s.fontFamily = props['font-family'];
-        if (props['font-size']) s.fontSize = props['font-size'];
-        if (props.color) s.fill = props.color;
-        if (props.background !== undefined) s.backgroundColor = props.background;
-        if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
-        if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
-        if (props.underline !== undefined) s.underline = !!props.underline;
-        if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+        if (s) {
+          if (props['font-family']) s.fontFamily = props['font-family'];
+          if (props['font-size']) s.fontSize = props['font-size'];
+          if (props.color) s.fill = props.color;
+          if (props.background !== undefined) s.backgroundColor = props.background;
+          if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
+          if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
+          if (props.underline !== undefined) s.underline = !!props.underline;
+          if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+          
+          // 强制更新文本，确保样式变更立即生效
+          display.updateText();
+        }
       }
     }
     // 更新_style属性（仅适用于非文本、非图片元素）
@@ -1242,13 +1265,15 @@ export class Renderer {
       newProps['border-color'] = updatedStyle.borderColor;
       newProps.opacity = display.alpha;
       
-      newProps['font-family'] = display.style?.fontFamily;
-      newProps['font-size'] = display.style?.fontSize;
-      newProps.color = display.style?.fill;
-      newProps.bold = display.style?.fontWeight === 'bold';
-      newProps.italic = display.style?.fontStyle === 'italic';
-      newProps.underline = display.style?.underline;
-      newProps.lineThrough = display.style?.lineThrough;
+      // 对于文本元素，样式在display.text.style中
+      const textStyle = display.text?.style;
+      newProps['font-family'] = textStyle?.fontFamily;
+      newProps['font-size'] = textStyle?.fontSize;
+      newProps.color = textStyle?.fill;
+      newProps.bold = textStyle?.fontWeight === 'bold';
+      newProps.italic = textStyle?.fontStyle === 'italic';
+      newProps.underline = textStyle?.underline;
+      newProps.lineThrough = textStyle?.lineThrough;
     }
 
     const shapeType = display._shape ? display._shape.type : 'picture'; // 图片元素没有_shape，所以直接设置为'picture'
@@ -1264,8 +1289,12 @@ export class Renderer {
         }
     }
     if (Object.keys(propsToUndo).length === 0) {
-      console.log('没有找到新对象')
       return;
+    }
+
+    // 强制重新渲染画布，确保属性更改立即显示
+    if (this.app && this.app.renderer) {
+      this.app.renderer.render(this.app.stage);
     }
 
     // historyStore.recordAction({

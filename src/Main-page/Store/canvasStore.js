@@ -514,7 +514,7 @@ export const useCanvasStore = defineStore('canvas', {
         try {
             // 1. 异步渲染图片并添加到舞台 (等待 Promise 返回)
             const imageItem = await this.renderer.renderImage(x, y, imageUrl, { filters, scale });
-            //this.forceViewPotUpdate()
+            this.forceViewPotUpdate()
             if (!imageItem || !imageItem.id) {
                 console.warn('图片对象创建失败或缺少ID，无法记录历史。');
                 return;
