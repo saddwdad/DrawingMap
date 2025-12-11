@@ -6,6 +6,7 @@ import { markRaw } from 'vue';
 export class Renderer {
   
 
+  
   constructor(stage) {
     this.stage = stage;
     this.objects = [];
@@ -27,6 +28,7 @@ export class Renderer {
     this.selectedObjects = []; // 当前选中的元素列表
     this.isDraggingGroup = false; // 是否正在进行组拖动
     this.dragOffset = { x: 0, y: 0 }; // 组拖动时的偏移量
+    this.canvasStore = useCanvasStore()
   }
 
 
@@ -390,6 +392,7 @@ export class Renderer {
           selectEnd: renderer.selectEnd
         });
         renderer.updateSelectBox();
+        
       }
     });
     
@@ -661,6 +664,7 @@ export class Renderer {
       
       // 鼠标移动事件 - 拖动元素或组
       display.on('pointermove', (e) => {
+
         // 处理组拖动
         if (renderer.isDraggingGroup) {
           // e.stopPropagation(); // 阻止事件冒泡
@@ -685,7 +689,7 @@ export class Renderer {
             console.warn('Invalid first object for group dragging');
             return;
           }
-          
+          console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
           const firstDeltaX = deltaX - firstObj.position.x;
           const firstDeltaY = deltaY - firstObj.position.y;
           
@@ -696,11 +700,19 @@ export class Renderer {
               obj.position.y += firstDeltaY;
             }
           });
+
+          if (renderer.app && renderer.app.renderer) {
+              renderer.app.renderer.render(renderer.stage);
+          }
+          console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
+          if (canvasStore.notifyObjectsChange) {
+              canvasStore.notifyObjectsChange(); 
+          }
           
           // 更新小地图
-          if (renderer.miniMapContent) {
-            renderer.renderMiniMap();
-          }
+          // if (renderer.miniMapContent) {
+          //   renderer.renderMiniMap();
+          // }
           return;
         }
         
@@ -713,11 +725,10 @@ export class Renderer {
         const newLocalPos = display.parent.toLocal(e.global);
         display.position.x = newLocalPos.x - dragState.offsetX;
         display.position.y = newLocalPos.y - dragState.offsetY;
-        
-        // 更新小地图
-        if (renderer.miniMapContent) {
-          renderer.renderMiniMap();
+        if (canvasStore.notifyObjectsChange) {
+          canvasStore.notifyObjectsChange(); 
         }
+        console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
       });
       
       // 鼠标抬起事件 - 结束拖动

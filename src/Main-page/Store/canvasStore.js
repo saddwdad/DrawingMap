@@ -214,7 +214,10 @@ export const useCanvasStore = defineStore('canvas', {
   actions: {
     //非响应式，手动设置触发器进行对象更新
     notifyObjectsChange(){
-      this.objectChangeKey++;
+      this.$patch( state => {
+        state.objectChangeKey++;
+      })
+      console.log("触发计数器当前值", this.objectChangeKey)
     },
     
     // 设置渲染器
@@ -263,7 +266,6 @@ export const useCanvasStore = defineStore('canvas', {
     },
 
     // 开始拖动
-    // 开始拖动
     startDrag(e) {
 
       this.isDragging = true
@@ -271,7 +273,6 @@ export const useCanvasStore = defineStore('canvas', {
       this.lastDragDelta = { dx: 0, dy: 0 }
     },
 
-    // 拖动视口
     // 拖动视口
     dragViewport(e) {
       if (!this.isDragging) return
