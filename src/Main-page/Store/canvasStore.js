@@ -6,7 +6,8 @@ import { serializePixiObjects } from '@/LocalStorage/localCache';
 import { text } from '@fortawesome/fontawesome-svg-core';
 export const useCanvasStore = defineStore('canvas', {
   state: () => ({
-    
+    //手动设置触发器
+    objectChangeKey: 0,
     viewport: {
       x: 0,
       y: 0,
@@ -211,6 +212,11 @@ export const useCanvasStore = defineStore('canvas', {
     scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
+    //非响应式，手动设置触发器进行对象更新
+    notifyObjectsChange(){
+      this.objectChangeKey++;
+    },
+    
     // 设置渲染器
     
     getObjectById(id) {

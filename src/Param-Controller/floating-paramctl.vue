@@ -320,7 +320,7 @@ const handleSliderInput = (property, value) => {
         
     } else {
         props[property] = value;
-        canvasStore.renderer.applyShapeChange(currentDisplay, props);
+        canvasStore.renderer.updateShape(currentDisplay, props);
     }
     
     switch(property){
@@ -370,7 +370,7 @@ const handleSliderDragEnd = (property, value) => {
     // 确保最终值已应用
     const props = {};
     props[property] = value;
-    canvasStore.renderer.applyShapeChange(currentDisplay, props);
+    canvasStore.renderer.updateShape(currentDisplay, props);
     const displayId = currentDisplay.id;
     const finalProps = capturePropsSnapshot(currentDisplay);
     const startPropsForHistory = dragStartProps;

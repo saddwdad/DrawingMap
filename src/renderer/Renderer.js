@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { useCanvasStore } from '@/Main-page/Store/canvasStore';
 import { useHistoryStore } from '@/History/History';
 import { nextUniqueId } from '@/History/idGenerator';
+import { markRaw } from 'vue';
 export class Renderer {
   
 
@@ -585,7 +586,7 @@ export class Renderer {
   
   // 将图形对象添加到舞台并设置位置
   addToStage(display, x, y, existingId = null) {
-
+    const canvasStore = useCanvasStore()
     console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
     display.position.set(x, y)
     this.stage.addChild(display)
@@ -594,7 +595,10 @@ export class Renderer {
     this.objectMap.push(display.id)
     console.log(`x: ${x}, y: ${y}`)
     if (this.canvasStore && this.canvasStore.objects) {
-      this.canvasStore.objects.push(display);
+      this.canvasStore.objects.push(markRaw(display));
+    }
+    if(this.canvasStore){
+      canvasStore.notifyObjectsChange()
     }
     
     // 选择支持：绑定指针事件，点击通知外部选中
@@ -856,6 +860,7 @@ export class Renderer {
   // 更新已有形状样式或几何：统一入口，形状与文本均可
   updateShape(display, props = {}, shouldRecord = true) {
     const historyStore = useHistoryStore()
+    const canvasStore = useCanvasStore()
     if (!display || !display._shape) return
     console.log(props)
     console.log(display)
@@ -949,202 +954,13 @@ export class Renderer {
       display._style = next
     }
     if (props.opacity !== undefined) display.alpha = props.opacity
-    const updatedStyle = display._style || {};
-    const newProps = {
-        width: shape.width,
-        height: shape.height,
-        radius: shape.radius,
-        size: shape.size,
-        text: display.text, 
-
-        background: updatedStyle.background,
-        'border-width': updatedStyle.borderWidth,
-        'border-color': updatedStyle.borderColor,
-        opacity: display.alpha,
-      
-        'font-family': display.style?.fontFamily,
-        'font-size': display.style?.fontSize,
-        color: display.style?.fill,
-        bold: display.style?.fontWeight === 'bold',
-        italic: display.style?.fontStyle === 'italic',
-        underline: display.style?.underline,
-        lineThrough: display.style?.lineThrough
-    }
-
-    const shapeType = shape.type;
-    const self = this; 
-    const displayId = display.id; 
-    
-    const propsToUndo = {};
-    const propsToRedo = {};
-    for (const key in props) {
-        if (oldProps[key] !== newProps[key]) {
-             propsToUndo[key] = oldProps[key];
-             propsToRedo[key] = newProps[key];
-        }
-    }
-    if (Object.keys(propsToUndo).length === 0) {
-    console.log('没有找到新对象')
-    return;
+    //改为非响应式，手动设置canvasStore数组触发自动响应
+    if(this.canvasStore){
+      canvasStore.notifyObjectsChange();
     }
   }
 
-   applyShapeChange(display, props = {}) {
-    const historyStore = useHistoryStore()
-    if (!display || !display._shape) return
-    const shape = display._shape
 
-    const style = display._style || {}
-    const oldProps = {
-        width: shape.width,
-        height: shape.height,
-        radius: shape.radius,
-        size: shape.size,
-        text: display.text, 
-
-        background: style.background,
-        'border-width': style.borderWidth,
-        'border-color': style.borderColor,
-        opacity: display.alpha,
-      
-        'font-family': display.style?.fontFamily,
-        'font-size': display.style?.fontSize,
-        color: display.style?.fill,
-        bold: display.style?.fontWeight === 'bold',
-        italic: display.style?.fontStyle === 'italic',
-        underline: display.style?.underline,
-        lineThrough: display.style?.lineThrough
-    }
-
-    const next = {
-      background: props.background ?? style.background ?? null,
-      borderWidth: props['border-width'] ?? style.borderWidth ?? 0,
-      borderColor: props['border-color'] ?? style.borderColor ?? null,
-    }
-    // 更新几何尺寸
-    if (shape.type === 'rect') {
-      const width = props.width ?? shape.width
-      const height = props.height ?? shape.height
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.rect(-width / 2, -height / 2, width, height)
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.width = width
-      display._shape.height = height
-    } else if (shape.type === 'circle') {
-      const radius = props.radius ?? shape.radius
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.circle(0, 0, radius)
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.radius = radius
-    } else if (shape.type === 'triangle') {
-      const size = props.size ?? shape.size
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.moveTo(0, -size / 2)
-      display.lineTo(size / 2, size / 2)
-      display.lineTo(-size / 2, size / 2)
-      display.closePath()
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.size = size
-    } else if (shape.type === 'text') {
-      // 文本更新：支持样式与内容
-      if (typeof props.text === 'string') {
-        display.text = props.text
-      }
-      const s = display.style
-      if (props['font-family']) s.fontFamily = props['font-family']
-      if (props['font-size']) s.fontSize = props['font-size']
-      if (props.color) s.fill = props.color
-      if (props.background !== undefined) s.backgroundColor = props.background
-      if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal'
-      if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal'
-      if (props.underline !== undefined) s.underline = !!props.underline
-      if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough
-    }
-    // 只有非文本元素才更新_style属性
-    if (shape.type !== 'text') {
-      display._style = next
-    }
-    if (props.opacity !== undefined) display.alpha = props.opacity
-    const updatedStyle = display._style || {};
-    const newProps = {
-        width: shape.width,
-        height: shape.height,
-        radius: shape.radius,
-        size: shape.size,
-        text: display.text, 
-
-        background: updatedStyle.background,
-        'border-width': updatedStyle.borderWidth,
-        'border-color': updatedStyle.borderColor,
-        opacity: display.alpha,
-      
-        'font-family': display.style?.fontFamily,
-        'font-size': display.style?.fontSize,
-        color: display.style?.fill,
-        bold: display.style?.fontWeight === 'bold',
-        italic: display.style?.fontStyle === 'italic',
-        underline: display.style?.underline,
-        lineThrough: display.style?.lineThrough
-    }
-
-    const shapeType = shape.type;
-    const self = this; 
-    const displayId = display.id; 
-    
-    const propsToUndo = {};
-    const propsToRedo = {};
-    for (const key in props) {
-        if (oldProps[key] !== newProps[key]) {
-             propsToUndo[key] = oldProps[key];
-             propsToRedo[key] = newProps[key];
-        }
-    }
-    if (Object.keys(propsToUndo).length === 0) {
-    console.log('没有找到新对象')
-    return;
-    }
-
-    // historyStore.recordAction({
-    //   type: `change_props_${shapeType}`,
-    //   shapeType: shapeType,
-
-    //   undo: () => {
-    //     const itemToRechange = self.findObjectById(displayId); 
-    //     console.log(`[DEBUG REDO] 查找对象ID: ${displayId}`, itemToRechange ? '找到' : '未找到'); // 👈 添加此行
-    //     if (itemToRechange) {
-    //       console.log('[DEBUG REDO] 应用数据:', propsToRedo);  
-    //       self.updateShape(itemToRechange, propsToUndo);
-    //       }
-    //   },
-    //   redo: () => {
-    //     const itemToRechange = self.findObjectById(displayId);
-    //     console.log(`[DEBUG REDO] 查找对象ID: ${displayId}`, itemToRechange ? '找到' : '未找到'); // 👈 添加此行
-    //     if (itemToRechange) {
-    //       console.log('[DEBUG REDO] 应用数据:', propsToRedo);  
-    //       self.updateShape(itemToRechange, propsToRedo);
-    //       }
-    //     }
-
-    // })
-  } 
 
   getWorldBounds() {
     if (this.objects.length === 0) {

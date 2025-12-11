@@ -323,9 +323,9 @@ const debouncedDraw = () => {
     drawMinimap();
   }, 30); // 30ms延迟，减少重绘次数
 };
-
+const objectChangeKey = computed(() => store.objectChangeKey);
 // 优化监听逻辑：只监听必要的变化，且使用防抖
-watch([viewport, bounds, objects], debouncedDraw, { deep: true, immediate: true });
+watch([viewport, bounds, objects, objectChangeKey], debouncedDraw, { deep: true, immediate: true });
 
 // 组件挂载时绘制
 onMounted(() => {
