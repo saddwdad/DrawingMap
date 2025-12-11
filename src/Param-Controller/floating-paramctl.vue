@@ -8,7 +8,7 @@
     </h3>
     
     <!-- 针对选中对象类型显示不同的参数编辑选项 -->
-    <template v-if="selectedObject._shape.type === 'text'">
+    <template v-if="(selectedObject._shape?.type || selectedObject.type) === 'text'">
       <!-- 文本内容 -->
       <div class="param-item">
         <label class="param-label">文本内容</label>
@@ -88,6 +88,41 @@
         </div>
       </div>
     </template>
+    <template v-else-if="selectedObject.imageUrl !== undefined">
+      <!-- 图片参数编辑 -->
+      <div class="param-item">
+        <label class="param-label">图片滤镜</label>
+        <a-select 
+          v-model:value="imageFilter" 
+          placeholder="选择滤镜" 
+          class="filter-select"
+          @mousedown="handleSliderDragStart('filters', selectedObject)"
+          @change="handleFilterChange($event)"
+        >
+          <a-select-option value="none">无滤镜</a-select-option>
+          <a-select-option value="green">绿色</a-select-option>
+          <a-select-option value="warm">暖色</a-select-option>
+          <a-select-option value="cool">冷色</a-select-option>
+        </a-select>
+      </div>
+      <div class="param-item">
+        <label class="param-label">图片缩放</label>
+        <div class="slider-group">
+          <input 
+            type="range" 
+            class="param-slider" 
+            min="0.1" 
+            max="3" 
+            step="0.1"
+            :value="imageScale"
+            @mousedown="handleSliderDragStart('scale', selectedObject)"
+            @input="handleImageScaleChange($event.target.value)"
+            @mouseup="handleSliderDragEnd('scale', { x: Number($event.target.value), y: Number($event.target.value) })"
+          >
+          <span class="slider-value">{{ (imageScale * 100).toFixed(0) }}%</span>
+        </div>
+      </div>
+    </template>
     <template v-else>
       <!-- 图形颜色 -->
       <div class="param-item">
@@ -147,7 +182,7 @@
         >
       </div>
       <!-- 图形大小参数根据图形类型调整 -->
-      <div class="param-item" v-if="selectedObject._shape.type === 'rect'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'rect'">
         <label class="param-label">宽度</label>
         <div class="slider-group">
           <input 
@@ -179,7 +214,7 @@
           <span class="slider-value">{{ shapeHeight }}px</span>
         </div>
       </div>
-      <div class="param-item" v-if="selectedObject._shape.type === 'circle'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'circle'">
         <label class="param-label">半径</label>
         <div class="slider-group">
           <input 
@@ -195,7 +230,7 @@
           <span class="slider-value">{{ radius }}px</span>
         </div>
       </div>
-      <div class="param-item" v-if="selectedObject._shape.type === 'triangle'">
+      <div class="param-item" v-if="selectedObject._shape && selectedObject._shape.type === 'triangle'">
         <label class="param-label">大小</label>
         <div class="slider-group">
           <input 
@@ -221,7 +256,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, toRaw } from 'vue'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { useUiStore } from '@/Main-page/Store/UIStore'
 import { useHistoryStore } from '@/History/History'
@@ -306,19 +341,32 @@ const handleSliderDragStart = (property, display) => {
 //处理鼠标拖拽
 const handleSliderInput = (property, value) => {
     if (!selectedObject.value) return;
-
     const currentDisplay = selectedObject.value;
     const props = {};
     
-    if (currentDisplay._shape.type === 'text') {
+    // 检查是否为图片元素
+    const isPicture = currentDisplay.imageUrl !== undefined;
+    
+    if (currentDisplay._shape && currentDisplay._shape.type === 'text') {
         props[property] = value;
-        if (property === 'font-size' || property === 'font-family' || property === 'color' || property === 'background') {
-             updateTextProperty(property, value, { record: false }); 
-        } else {
-             updateTextContent(value, { record: false });
-        }
+        // 实时应用文本属性变化
+        canvasStore.renderer.updateShape(currentDisplay, props);
         
-    } else {
+    } else if (isPicture) {
+        // 图片元素处理
+        if (property === 'scale') {
+            const scaleValue = Number(value);
+            props.scale = { x: scaleValue, y: scaleValue };
+            imageScale.value = scaleValue;
+            // 实时应用缩放变化
+            canvasStore.renderer.updateShape(currentDisplay, props);
+        } else if (property === 'filters') {
+            // 实时应用滤镜变化
+            props.filters = value;
+            imageFilter.value = value;
+            canvasStore.renderer.updateShape(currentDisplay, props);
+        }
+    } else if (currentDisplay._shape) {
         props[property] = value;
         canvasStore.renderer.updateShape(currentDisplay, props);
     }
@@ -374,14 +422,19 @@ const handleSliderDragEnd = (property, value) => {
     const displayId = currentDisplay.id;
     const finalProps = capturePropsSnapshot(currentDisplay);
     const startPropsForHistory = dragStartProps;
+    
+    // 获取元素类型用于历史记录
+    const elementType = currentDisplay.imageUrl !== undefined ? 'picture' : (currentDisplay._shape?.type || currentDisplay.type || 'unknown');
+    
     // 记录合并的历史操作
     if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
         historyStore.recordAction({
-            type: `slide_change_${currentDisplay._shape.type}`,
+            type: `slide_change_${elementType}`,
             undo: () => {
               const activeObj = canvasStore.getObjectById(displayId);
               if(activeObj){
                 canvasStore.renderer.updateShape(activeObj, startPropsForHistory)
+                canvasStore.notifyObjectsChange()
               }
             },
             
@@ -412,22 +465,15 @@ const handleTextEditStart = (display) => {
     
     console.log(textStartProps)
 }
-//实时文本更新
-// const handleTextInput = (value) => {
-//     if (!selectedObject.value || selectedObject.value._shape.type !== 'text') return
-//     const currentDisplay = selectedObject.value
-//     updateTextContent(value)
-//     updateTextProperty(value) 
-//     textContent.value = value
-// };
+
 //捕获新的文本快照
 const handleTextEditEnd = (newValue) => {
     const currentDisplay = selectedObject.value;
     
 
-    if (!currentDisplay || !textStartProps || textDisplayId !== currentDisplay.id) {
-        textStartProps = null;
-        textDisplayId = null;
+    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+        dragStartProps = null;
+        dragDisplayId = null;
         return;
     }
     const finalProps = capturePropsSnapshot(currentDisplay);
@@ -456,18 +502,28 @@ const handleTextEditEnd = (newValue) => {
 };
 
 
+// 图片滤镜
+const imageFilter = ref('none');
+// 图片缩放
+const imageScale = ref(1);
+
 const updatePropertiesFromObject = (obj) => {
-  if (obj._shape.type === 'text') {
+  if ((obj._shape?.type || obj.type) === 'text') {
     // 更新文本属性
     textContent.value = obj.text || ''
-    fontFamily.value = obj.style.fontFamily || 'Arial'
-    fontSize.value = obj.style.fontSize || 24
-    color.value = obj.style.fill || '#ffffff'
-    background.value = obj.style.backgroundColor || null
-    bold.value = obj.style.fontWeight === 'bold'
-    italic.value = obj.style.fontStyle === 'italic'
-    underline.value = obj.style.underline || false
-    lineThrough.value = obj.style.lineThrough || false
+    const textStyle = obj.style || {}
+    fontFamily.value = textStyle.fontFamily || 'Arial'
+    fontSize.value = textStyle.fontSize || 24
+    color.value = textStyle.fill || '#ffffff'
+    background.value = textStyle.backgroundColor || null
+    bold.value = textStyle.fontWeight === 'bold'
+    italic.value = textStyle.fontStyle === 'italic'
+    underline.value = textStyle.underline || false
+    lineThrough.value = textStyle.lineThrough || false
+  } else if (obj.imageUrl !== undefined) {
+    // 更新图片属性
+    imageFilter.value = obj.rawFilters || 'none'
+    imageScale.value = obj.scale?.x || 1
   } else {
     // 更新图形属性
     const style = obj._style || {}
@@ -477,70 +533,146 @@ const updatePropertiesFromObject = (obj) => {
     opacity.value = obj.alpha || 1
     
     // 根据图形类型更新尺寸属性
-    if (obj._shape.type === 'rect') {
+    if (obj._shape && obj._shape.type === 'rect') {
       shapeWidth.value = obj._shape.width || 100
       shapeHeight.value = obj._shape.height || 100
-    } else if (obj._shape.type === 'circle') {
+    } else if (obj._shape && obj._shape.type === 'circle') {
       radius.value = obj._shape.radius || 50
-    } else if (obj._shape.type === 'triangle') {
+    } else if (obj._shape && obj._shape.type === 'triangle') {
       triangleSize.value = obj._shape.size || 100
     }
   }
 }
 
+// 处理图片缩放输入
+const handleImageScaleChange = (value) => {
+  const scaleValue = Number(value)
+  imageScale.value = scaleValue
+  if (selectedObject.value && selectedObject.value.imageUrl !== undefined) {
+    const currentDisplay = selectedObject.value
+    updatePictureProperty('scale', { x: scaleValue, y: scaleValue })
+  }
+}
+
+// 处理滤镜变化
+const handleFilterChange = (value) => {
+  updatePictureProperty('filters', value)
+}
+
+// 更新图片属性
+const updatePictureProperty = (property, value) => {
+  if (selectedObject.value && selectedObject.value.imageUrl !== undefined) {
+    const props = {}
+    const currentDisplay = selectedObject.value
+    props[property] = value
+    canvasStore.renderer.updateShape(currentDisplay, props)
+    const renderer = canvasStore.renderer;
+    if (!renderer) {
+        console.error('DEBUG RENDER: canvasStore.renderer 未定义！');
+        return;
+    }
+    if (!renderer.app) {
+        console.error('DEBUG RENDER: canvasStore.renderer.app 未定义！');
+        // 尝试检查 stage 是否存在，如果存在，则可能是 app 丢失
+        console.error('DEBUG RENDER: 检查 Stage: ', !!renderer.stage);
+        return;
+    }
+    if (!renderer.app.renderer) {
+        console.error('DEBUG RENDER: canvasStore.renderer.app.renderer 未定义！');
+        return;
+    }
+    if (!renderer.stage) {
+        console.error('DEBUG RENDER: canvasStore.renderer.stage 未定义！');
+        return;
+    }
+    // if (canvasStore.renderer && canvasStore.renderer.app && canvasStore.renderer.app.renderer) {
+    //       console.log('执行到强制渲染');
+    //       canvasStore.renderer.app.renderer.render(canvasStore.renderer.app.stage);
+    // }
+    canvasStore.forceViewpotUpdate()
+    // 更新本地状态
+    if (property === 'filters') imageFilter.value = value
+    if (property === 'scale') imageScale.value = value.x
+  }
+}
+
 //捕获当前对象属性
 const capturePropsSnapshot = (display) => {
-    if (!display || !display._shape) return {};
+    if (!display) return {};
+    const rawDisplay = display
+    // 检查是否为图片元素
+    const isPicture = display.imageUrl !== undefined;
     
-    const shape = display._shape;
-    const style = display._style || {};
-    
-    
-    const snapshot = {
-        // 几何属性
-        width: shape.width,
-        height: shape.height,
-        radius: shape.radius,
-        size: shape.size,
-        text: display.text, 
+    if (isPicture) {
+        // 图片元素属性快照
+        return {
+            filters: display.rawFilters || 'none',
+            scale: { x: display.scale.x, y: display.scale.y },
+            opacity: display.alpha
+        };
+    } else if (display._shape) {
+        // 常规形状或文本元素属性快照
+        const shape = display._shape;
+        const style = display._style || {};
+        
+        return {
+            // 几何属性
+            width: shape.width,
+            height: shape.height,
+            radius: shape.radius,
+            size: shape.size,
+            text: String(display.text), 
 
-        // 样式属性 (来自 _style)
-        background: style.background,
-        'border-width': style.borderWidth,
-        'border-color': style.borderColor,
-        opacity: display.alpha,
-        
-        // 文本样式属性 (来自 display.style)
-        'font-family': display.style?.fontFamily,
-        'font-size': display.style?.fontSize,
-        color: display.style?.fill,
-        bold: display.style?.fontWeight === 'bold',
-        italic: display.style?.fontStyle === 'italic',
-        underline: display.style?.underline,
-        lineThrough: display.style?.lineThrough
-        
-    };
-    return snapshot;
+            // 样式属性 (来自 _style)
+            background: style.background,
+            'border-width': style.borderWidth,
+            'border-color': style.borderColor,
+            opacity: display.alpha,
+            
+            // 文本样式属性 (来自 display.style)
+            'font-family': display.style?.fontFamily,
+            'font-size': display.style?.fontSize,
+            color: display.style?.fill,
+            bold: display.style?.fontWeight === 'bold',
+            italic: display.style?.fontStyle === 'italic',
+            underline: display.style?.underline,
+            lineThrough: display.style?.lineThrough
+        };
+    }
+    
+    return {};
 };
 
 // 监听选中对象变化，更新属性值
-watch(() => canvasStore.selectedObject, (newObj) => {
-  if (newObj) {
-    // 从选中对象中提取属性值
-    updatePropertiesFromObject(newObj)
-  }
+watch(() => [
+    canvasStore.selectedObject,
+    canvasStore.objectChangeKey // 加入手动触发的依赖键
+], ([selectedObject, _objectChangeKey]) => { // newObj 是 selectedObject， key 是 objectChangeKey
+    // 仅在新对象有效时更新
+    if (selectedObject) {
+        // 关键安全检查：避免读取 undefined 的 'type'
+        if (!selectedObject._shape && !selectedObject.type) { 
+             console.warn("选中对象结构异常，跳过更新。");
+             return;
+        }
+        
+        // 触发更新
+        updatePropertiesFromObject(selectedObject)
+        console.log('已更新')
+    }
 }, { immediate: true })
 
 // 更新文本内容
 const updateTextContent = (value) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
-    canvasStore.renderer.updateShape(selectedObject.value, { text: value })
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
+    const rawObj = toRaw(selectedObject.value)
+    canvasStore.renderer.updateShape(rawObj, { text: value })
   }
 }
 
 // 更新文本属性
 const updateTextProperty = (property, value) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
     const props = {}
     props[property] = value
     canvasStore.renderer.updateShape(selectedObject.value, props)
@@ -555,17 +687,18 @@ const updateTextProperty = (property, value) => {
 
 // 切换文本样式属性
 const toggleTextProperty = (property) => {
-  if (selectedObject.value && selectedObject.value._shape.type === 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type === 'text') {
     const display = selectedObject.value;
+    const textStyle = display.style;
         let currentState;
         if (property === 'bold') {
-            currentState = display.style.fontWeight === 'bold';
+            currentState = textStyle?.fontWeight === 'bold';
         } else if (property === 'italic') {
-            currentState = display.style.fontStyle === 'italic';
+            currentState = textStyle?.fontStyle === 'italic';
         } else if (property === 'underline') {
-            currentState = !!display.style.underline;
+            currentState = !!textStyle?.underline;
         } else if (property === 'lineThrough') {
-            currentState = !!display.style.lineThrough;
+            currentState = !!textStyle?.lineThrough;
         } else {
             return;
         }
@@ -588,7 +721,7 @@ const toggleTextProperty = (property) => {
 
 // 更新图形属性
 const updateShapeProperty = (property, value) => {
-  if (selectedObject.value && selectedObject.value._shape.type !== 'text') {
+  if (selectedObject.value && selectedObject.value._shape && selectedObject.value._shape.type !== 'text' && !selectedObject.value.imageUrl) {
     const props = {}
     const currentDisplay = selectedObject.value;
     props[property] = value

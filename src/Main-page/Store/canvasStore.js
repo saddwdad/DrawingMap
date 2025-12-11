@@ -6,7 +6,6 @@ import { serializePixiObjects } from '@/LocalStorage/localCache';
 import { text } from '@fortawesome/fontawesome-svg-core';
 export const useCanvasStore = defineStore('canvas', {
   state: () => ({
-    //手动设置触发器
     objectChangeKey: 0,
     viewport: {
       x: 0,
@@ -221,7 +220,12 @@ export const useCanvasStore = defineStore('canvas', {
     },
     
     // 设置渲染器
-    
+    notifyObjectsChange(){
+      this.$patch( state => {
+        state.objectChangeKey++;
+      })
+      console.log("触发计数器当前值", this.objectChangeKey)
+    },
     getObjectById(id) {
         if (!id || !Array.isArray(this.objects)) {
             return null
@@ -731,6 +735,10 @@ export const useCanvasStore = defineStore('canvas', {
         )
 
       }
+      if (newItem) {
+        // 🌟 标记：所有重建的对象，无论类型，都需要强制渲染来校准
+        newItem.needsRenderFix = true; 
+    }
       return newItem
     },
 

@@ -238,7 +238,7 @@ const initPixi = async () => {
   // drawInfiniteGrid(stage)
 
   // 5. 初始化渲染器并设置到store，直接使用stage作为绘制容器
-  renderer = new Renderer(stage);
+  renderer = new Renderer(stage,app);
   // 初始化画布事件监听器（用于框选功能），传入app.stage作为参数
   
   canvasStore.setRenderer(renderer);

@@ -7,8 +7,9 @@ export class Renderer {
   
 
   
-  constructor(stage) {
+  constructor(stage, app) {
     this.stage = stage;
+    this.app = app;
     this.objects = [];
     this.objectMap = [];
     // 选择回调：由外部（Store）注入，用于对象被点击时通知选中
@@ -85,6 +86,7 @@ export class Renderer {
           const texture = PIXI.Texture.from(img)
           const sprite = new PIXI.Sprite(texture)
           sprite.imageUrl = imageUrl
+          sprite.needsRenderFix = true;
           sprite.rawFilters = options.filters || 'none'
           if (options.filters) {
             const f = this.applyFilters(options.filters)
@@ -590,6 +592,7 @@ export class Renderer {
   // 将图形对象添加到舞台并设置位置
   addToStage(display, x, y, existingId = null) {
     const canvasStore = useCanvasStore()
+    const historyStore = useHistoryStore()
     console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
     display.position.set(x, y)
     this.stage.addChild(display)
@@ -599,6 +602,9 @@ export class Renderer {
     console.log(`x: ${x}, y: ${y}`)
     if (this.canvasStore && this.canvasStore.objects) {
       this.canvasStore.objects.push(markRaw(display));
+    }
+    if (display.needsRenderFix === undefined) {
+      display.needsRenderFix = false; 
     }
     if(this.canvasStore){
       canvasStore.notifyObjectsChange()
@@ -644,9 +650,11 @@ export class Renderer {
               renderer.isDraggingGroup = true;
               
               // 计算鼠标相对于元素位置的偏移量
+              const firstObj = renderer.selectedObjects[0];
+              const stageClickPos = renderer.stage.toLocal(e.global);
               const localPos = display.toLocal(e.global);
-              renderer.dragOffset.x = localPos.x;
-              renderer.dragOffset.y = localPos.y;
+              renderer.dragOffset.x = stageClickPos.x - firstObj.position.x;
+              renderer.dragOffset.y = stageClickPos.y - firstObj.position.y;
             } else {
               // 单选拖动
               // 开始拖动
@@ -657,7 +665,19 @@ export class Renderer {
               dragState.offsetX = localPos.x;
               dragState.offsetY = localPos.y;
             }
-            
+            if (!renderer.isDraggingGroup && !renderer.selectedObjects.includes(display)) {
+        // 如果是单选拖动，selectedObjects 应该只有这一个
+                renderer.selectedObjects = [display]; 
+                // 警告：如果 selectedObjects 是 Pinia Store 的 state 并且不能直接覆盖，
+                // 你可能需要调用一个 Pinia Action：canvasStore.setSelectedObjects([display])。
+                // 但既然你之前是直接 .map()，我们假设它可以被直接赋值。
+            }
+            this.dragStartSnapshot = this.selectedObjects.map(obj => ({
+                id: obj.id,
+                x: obj.position.x,
+                y: obj.position.y
+            }));
+            console.log('最早的他妈的位置',renderer.dragStartSnapshot)
             display.cursor = 'grabbing';
         }
       });
@@ -669,6 +689,8 @@ export class Renderer {
         if (renderer.isDraggingGroup) {
           // e.stopPropagation(); // 阻止事件冒泡
           
+          let shouldForceRender = false; 
+          const objectsToIsolate = []; // 存放需要被保护的新图形
           // 计算新位置
           const globalPos = e.global;
           const stagePos = renderer.stage.toLocal(globalPos);
@@ -677,12 +699,16 @@ export class Renderer {
           const deltaX = stagePos.x - renderer.dragOffset.x;
           const deltaY = stagePos.y - renderer.dragOffset.y;
           
+          
           // 检查是否有选中的对象
           if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
             console.warn('No selected objects for group dragging');
             return;
           }
-          
+          if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
+          renderer.isDraggingGroup = false; 
+          return;
+          }
           // 移动选中的第一个元素到新位置
           const firstObj = renderer.selectedObjects[0];
           if (!firstObj || !firstObj.position) {
@@ -695,24 +721,56 @@ export class Renderer {
           
           // 移动所有选中的元素
           renderer.selectedObjects.forEach(obj => {
+            
             if (obj && obj.position) {
               obj.position.x += firstDeltaX;
               obj.position.y += firstDeltaY;
             }
-          });
+            if (obj.needsRenderFix === true) {
+              shouldForceRender = true;
+              if (renderer.app && renderer.app.renderer) {
+                renderer.app.renderer.render(renderer.app.stage);
+              }
+            } 
+            // if (obj.needsRenderFix === false) {
+            //  objectsToIsolate.push(obj);
+            // }
 
-          if (renderer.app && renderer.app.renderer) {
-              renderer.app.renderer.render(renderer.stage);
-          }
+
+            // 找出需要被保护的新图形
+          });
+          // if (shouldForceRender) {
+    
+          //       objectsToIsolate.forEach(obj => {
+          //         console.log('删了没我操')
+          //           obj.visible = false; 
+          //       });
+
+          //       // 2. 强制渲染整个舞台 (World Transform 仅刷新剩下的，即需要修复的对象)
+          //       if (renderer.app && renderer.app.renderer) {
+          //           renderer.app.renderer.render(renderer.app.stage); 
+          //       }
+
+          //       // 3. 🌟 立即将新图形重新设置为可见
+          //       objectsToIsolate.forEach(obj => {
+          //         console.log('加了没我操')
+          //           obj.visible = true; 
+          //           if (obj.parent) {
+          //               // PIXI 方法：强制计算并应用此对象及其子对象的 World Transform 矩阵。
+          //               obj.parent.updateTransform(); 
+          //           }
+          //       });
+          // }
+          
+          
+
           console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
+          
+
+
           if (canvasStore.notifyObjectsChange) {
               canvasStore.notifyObjectsChange(); 
           }
-          
-          // 更新小地图
-          // if (renderer.miniMapContent) {
-          //   renderer.renderMiniMap();
-          // }
           return;
         }
         
@@ -728,6 +786,16 @@ export class Renderer {
         if (canvasStore.notifyObjectsChange) {
           canvasStore.notifyObjectsChange(); 
         }
+        if(display.needsRenderFix){
+          console.log('执行了没他妈的操')
+          if (this.app && this.app.renderer) {
+            console.log('执行到强制渲染')
+            this.app.renderer.render(this.app.stage);
+          }
+        }
+        if (canvasStore.notifyObjectsChange) {
+              canvasStore.notifyObjectsChange(); 
+        }
         console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
       });
       
@@ -742,9 +810,55 @@ export class Renderer {
         if (dragState.isDragging) {
           dragState.isDragging = false;
         }
+        const dragEndSnapshot = this.selectedObjects.map(obj => ({
+        id: obj.id,
+        x: obj.position.x,
+        y: obj.position.y
+      }));
+      console.log('最后的他妈的位置',dragEndSnapshot)
+
+      const startSnapshotForHistory = this.dragStartSnapshot;
+
+          // 检查是否有实际移动发生（防止无效的历史记录）
+          if (JSON.stringify(startSnapshotForHistory) !== JSON.stringify(dragEndSnapshot)) {
         
-        display.cursor = 'pointer';
-      });
+            historyStore.recordAction({
+                      type: `move_group_${this.selectedObjects.length > 1 ? 'multiple' : 'single'}`,
+                      
+                      // 撤销操作：将每个对象恢复到开始时的位置
+                      undo: () => {
+                          startSnapshotForHistory.forEach(startProp => {
+                              const obj = this.canvasStore.getObjectById(startProp.id);
+                              if (obj) {
+                                  this.canvasStore.renderer.updateShape(obj, { 
+                                      x: startProp.x, 
+                                      y: startProp.y 
+                                  });
+                              }
+                          });
+                          this.canvasStore.notifyObjectsChange();
+                      },
+                      
+                      // 重做操作：将每个对象移动到结束时的位置
+                      redo: () => {
+                          dragEndSnapshot.forEach(endProp => {
+                              const obj = this.canvasStore.getObjectById(endProp.id);
+                              if (obj) {
+                                  this.canvasStore.renderer.updateShape(obj, { 
+                                      x: endProp.x, 
+                                      y: endProp.y 
+                                  });
+                              }
+                          });
+                          this.canvasStore.notifyObjectsChange();
+                      }
+                  });
+                  console.log('--- Drag End (记录移动历史记录) ---');
+          }
+
+          // 重置状态
+          display.cursor = 'pointer';
+        });
       
       // 鼠标移出元素事件 - 结束拖动
       display.on('pointerupoutside', () => {
@@ -872,106 +986,275 @@ export class Renderer {
   updateShape(display, props = {}, shouldRecord = true) {
     const historyStore = useHistoryStore()
     const canvasStore = useCanvasStore()
-    if (!display || !display._shape) return
-    console.log(props)
-    console.log(display)
-    const shape = display._shape
-
-    const style = display._style || {}
-    const oldProps = {
-        width: shape.width,
-        height: shape.height,
-        radius: shape.radius,
-        size: shape.size,
-        text: display.text, 
-        background: style.background,
-        'border-width': style.borderWidth,
-        'border-color': style.borderColor,
-        opacity: display.alpha,
-      
-        'font-family': display.style?.fontFamily,
-        'font-size': display.style?.fontSize,
-        color: display.style?.fill,
-        bold: display.style?.fontWeight === 'bold',
-        italic: display.style?.fontStyle === 'italic',
-        underline: display.style?.underline,
-        lineThrough: display.style?.lineThrough
+    if (!display) return
+    if (props.x !== undefined) {
+        display.position.x = props.x;
     }
-
-    const next = {
-      background: props.background ?? style.background ?? null,
-      borderWidth: props['border-width'] ?? style.borderWidth ?? 0,
-      borderColor: props['border-color'] ?? style.borderColor ?? null,
+    if (props.y !== undefined) {
+        display.position.y = props.y;
     }
-    // 更新几何尺寸
-    if (shape.type === 'rect') {
-      const width = props.width ?? shape.width
-      const height = props.height ?? shape.height
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.rect(-width / 2, -height / 2, width, height)
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.width = width
-      display._shape.height = height
-    } else if (shape.type === 'circle') {
-      const radius = props.radius ?? shape.radius
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.circle(0, 0, radius)
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.radius = radius
-    } else if (shape.type === 'triangle') {
-      const size = props.size ?? shape.size
-      display.clear()
-      const fillStyle = next.background ? this.hexToRgb(next.background) : null
-      const strokeStyle = (next.borderWidth && next.borderColor) ? {
-        width: next.borderWidth,
-        color: this.hexToRgb(next.borderColor)
-      } : null
-      display.moveTo(0, -size / 2)
-      display.lineTo(size / 2, size / 2)
-      display.lineTo(-size / 2, size / 2)
-      display.closePath()
-      if (fillStyle !== null) display.fill(fillStyle)
-      if (strokeStyle) display.stroke(strokeStyle)
-      display._shape.size = size
-    } else if (shape.type === 'text') {
-      // 文本更新：支持样式与内容
-      if (typeof props.text === 'string') {
-        display.text = props.text
+    // 检查是否为图片元素
+    const isPicture = display.imageUrl !== undefined;
+
+    // 初始化样式更新对象
+    let next = {};
+    if (!isPicture && display._shape) {
+      const style = display._style || {};
+      next = {
+        background: props.background ?? style.background ?? null,
+        borderWidth: props['border-width'] ?? style.borderWidth ?? 0,
+        borderColor: props['border-color'] ?? style.borderColor ?? null,
+      };
+    }
+    // 更新元素属性
+    if (isPicture) {
+      // 更新图片滤镜
+      if (props.filters !== undefined) {
+        display.rawFilters = props.filters;
+        display.filters = null; // 清除所有现有滤镜
+        display.tint = 0xFFFFFF; // 重置色调
+        
+        if (props.filters !== 'none') {
+          // 简化滤镜实现，只使用色调来实现滤镜效果
+          if (props.filters === 'warm') display.tint = 0xffcc99;
+          else if (props.filters === 'cool') display.tint = 0x99ccff;
+          else if (props.filters === 'green') display.tint = 0x66ff66;
+        }
+
+        if(this.canvasStore){
+          canvasStore.notifyObjectsChange();
+        }
       }
-      const s = display.style
-      if (props['font-family']) s.fontFamily = props['font-family']
-      if (props['font-size']) s.fontSize = props['font-size']
-      if (props.color) s.fill = props.color
-      if (props.background !== undefined) s.backgroundColor = props.background
-      if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal'
-      if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal'
-      if (props.underline !== undefined) s.underline = !!props.underline
-      if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough
+      
+      // 更新图片缩放
+      if (props.scale !== undefined) {
+        if (typeof props.scale === 'object' && props.scale !== null) {
+          if (typeof props.scale.x === 'number') display.scale.x = props.scale.x;
+          if (typeof props.scale.y === 'number') display.scale.y = props.scale.y;
+        }
+
+        if(this.canvasStore){
+          canvasStore.notifyObjectsChange();
+        }
+      }
+
+    } 
+    // 更新常规形状或文本元素
+    else if (display._shape) {
+      const shape = display._shape;
+      
+      // 更新几何尺寸
+      if (shape.type === 'rect') {
+        const width = props.width ?? shape.width;
+        const height = props.height ?? shape.height;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.rect(-width / 2, -height / 2, width, height);
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.width = width;
+        display._shape.height = height;
+      } else if (shape.type === 'circle') {
+        const radius = props.radius ?? shape.radius;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.circle(0, 0, radius);
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.radius = radius;
+      } else if (shape.type === 'triangle') {
+        const size = props.size ?? shape.size;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.moveTo(0, -size / 2);
+        display.lineTo(size / 2, size / 2);
+        display.lineTo(-size / 2, size / 2);
+        display.closePath();
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.size = size;
+      } else if (shape.type === 'text') {
+        // 文本更新：支持样式与内容
+        if (typeof props.text === 'string') {
+          display.text = props.text;
+        }
+        // 对于文本元素，样式直接在display.style中
+        const s = display.style;
+        // 确保s是有效的样式对象
+        if (s) {
+          if (props['font-family']) s.fontFamily = props['font-family'];
+          if (props['font-size']) s.fontSize = props['font-size'];
+          if (props.color) s.fill = props.color;
+          if (props.background !== undefined) s.backgroundColor = props.background;
+          if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
+          if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
+          if (props.underline !== undefined) s.underline = !!props.underline;
+          if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+          
+          // 强制更新文本，确保样式变更立即生效
+          // display.updateText();
+        }
+      }
     }
-    // 只有非文本元素才更新_style属性
-    if (shape.type !== 'text') {
-      display._style = next
+    // 更新_style属性（仅适用于非文本、非图片元素）
+    if (!isPicture && display._shape && display._shape.type !== 'text') {
+      display._style = next;
     }
     if (props.opacity !== undefined) display.alpha = props.opacity
-    //改为非响应式，手动设置canvasStore数组触发自动响应
+    const storeObject = canvasStore.objects.find(o => o.id === display.id);
+    if (storeObject) {
+          if (props.x !== undefined) storeObject.x = props.x;
+          if (props.y !== undefined) storeObject.y = props.y;
+          canvasStore.forceViewpotUpdate()
+    }
+    
+    
     if(this.canvasStore){
       canvasStore.notifyObjectsChange();
     }
   }
 
+   applyShapeChange(display, props = {}) {
+    const historyStore = useHistoryStore()
+    if (!display) return
+    
+    // 检查是否为图片元素
+    const isPicture = display.imageUrl !== undefined;
 
+
+    // 初始化样式更新对象
+    let next = {};
+    if (!isPicture && display._shape) {
+      const style = display._style || {};
+      next = {
+        background: props.background ?? style.background ?? null,
+        borderWidth: props['border-width'] ?? style.borderWidth ?? 0,
+        borderColor: props['border-color'] ?? style.borderColor ?? null,
+      };
+    }
+    // 更新元素属性
+    if (isPicture) {
+      // 更新图片滤镜
+      if (props.filters !== undefined) {
+        display.rawFilters = props.filters;
+        display.filters = null; // 清除所有现有滤镜
+        display.tint = 0xFFFFFF; // 重置色调
+        
+        if (props.filters !== 'none') {
+          // 简化滤镜实现，只使用色调来实现滤镜效果
+          if (props.filters === 'warm') display.tint = 0xffcc99;
+          else if (props.filters === 'cool') display.tint = 0x99ccff;
+          else if (props.filters === 'green') display.tint = 0x66ff66;
+        }
+      }
+      
+      // 更新图片缩放
+      if (props.scale !== undefined) {
+        if (typeof props.scale === 'object' && props.scale !== null) {
+          if (typeof props.scale.x === 'number') display.scale.x = props.scale.x;
+          if (typeof props.scale.y === 'number') display.scale.y = props.scale.y;
+        }
+      }
+    } 
+    // 更新常规形状或文本元素
+    else if (display._shape) {
+      const shape = display._shape;
+      
+      // 更新几何尺寸
+      if (shape.type === 'rect') {
+        const width = props.width ?? shape.width;
+        const height = props.height ?? shape.height;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.rect(-width / 2, -height / 2, width, height);
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.width = width;
+        display._shape.height = height;
+      } else if (shape.type === 'circle') {
+        const radius = props.radius ?? shape.radius;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.circle(0, 0, radius);
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.radius = radius;
+      } else if (shape.type === 'triangle') {
+        const size = props.size ?? shape.size;
+        display.clear();
+        const fillStyle = next.background ? this.hexToRgb(next.background) : null;
+        const strokeStyle = (next.borderWidth && next.borderColor) ? {
+          width: next.borderWidth,
+          color: this.hexToRgb(next.borderColor)
+        } : null;
+        display.moveTo(0, -size / 2);
+        display.lineTo(size / 2, size / 2);
+        display.lineTo(-size / 2, size / 2);
+        display.closePath();
+        if (fillStyle !== null) display.fill(fillStyle);
+        if (strokeStyle) display.stroke(strokeStyle);
+        display._shape.size = size;
+      } else if (shape.type === 'text') {
+        // 文本更新：支持样式与内容
+        if (typeof props.text === 'string') {
+          display.text = props.text;
+        }
+        // 对于文本元素，样式直接在display.style中
+        const s = display.style;
+        if (s) {
+          if (props['font-family']) s.fontFamily = props['font-family'];
+          if (props['font-size']) s.fontSize = props['font-size'];
+          if (props.color) s.fill = props.color;
+          if (props.background !== undefined) s.backgroundColor = props.background;
+          if (props.bold !== undefined) s.fontWeight = props.bold ? 'bold' : 'normal';
+          if (props.italic !== undefined) s.fontStyle = props.italic ? 'italic' : 'normal';
+          if (props.underline !== undefined) s.underline = !!props.underline;
+          if (props.lineThrough !== undefined) s.lineThrough = !!props.lineThrough;
+          
+          // 强制更新文本，确保样式变更立即生效
+          // display.updateText();
+        }
+      }
+    }
+    // 更新_style属性（仅适用于非文本、非图片元素）
+    if (!isPicture && display._shape && display._shape.type !== 'text') {
+      display._style = next;
+    }
+    if (props.opacity !== undefined) display.alpha = props.opacity
+    
+    // 更新不透明度
+    if (props.opacity !== undefined) display.alpha = props.opacity;
+    
+    if(this.canvasStore){
+      this.canvasStore.notifyObjectsChange()
+    }
+
+    // 强制重新渲染画布，确保属性更改立即显示
+    if (this.app && this.app.renderer) {
+      this.app.renderer.render(this.stage);
+    }
+
+  } 
 
   getWorldBounds() {
     if (this.objects.length === 0) {
