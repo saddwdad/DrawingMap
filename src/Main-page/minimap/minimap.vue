@@ -94,16 +94,6 @@ const drawObject = (obj, ctx) => {
   // 关键：使用独立的objScale，直接映射主画布尺寸，不依赖世界边界缩放
   let drawSize, drawWidth, drawHeight, radius;
 
-  // 调试：打印获取到的图形尺寸（可以打开控制台验证）
-  console.log('图形尺寸:', {
-    type: shape.type,
-    width: shape.width,
-    height: shape.height,
-    radius: shape.radius,
-    size: shape.size,
-    objScale: objScale,
-    finalSize: shape.width ? shape.width * objScale : 'N/A'
-  });
 
   switch (shape.type || obj.constructor?.name) {
     case 'rect':

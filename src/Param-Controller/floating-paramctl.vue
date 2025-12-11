@@ -410,7 +410,7 @@ const handleTextEditStart = (display) => {
     
     console.log('--- Text Edit Start (捕获旧文本快照) ---');
     
-    console.log(dragStartProps)
+    console.log(textStartProps)
 }
 //实时文本更新
 // const handleTextInput = (value) => {
@@ -425,9 +425,9 @@ const handleTextEditEnd = (newValue) => {
     const currentDisplay = selectedObject.value;
     
 
-    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
-        dragStartProps = null;
-        dragDisplayId = null;
+    if (!currentDisplay || !textStartProps || textDisplayId !== currentDisplay.id) {
+        textStartProps = null;
+        textDisplayId = null;
         return;
     }
     const finalProps = capturePropsSnapshot(currentDisplay);
