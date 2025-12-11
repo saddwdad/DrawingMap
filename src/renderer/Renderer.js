@@ -625,6 +625,7 @@ export class Renderer {
         offsetY: 0
       };
       
+      
       // 获取canvas元素
       const canvas = this.appStage?.parent?.canvas || document.querySelector('canvas');
       
@@ -633,6 +634,7 @@ export class Renderer {
         return;
       }
       
+
       // 鼠标按下事件 - 开始拖动或组拖动
       display.on('pointerdown', (e) => {
         e.stopPropagation(); // 阻止事件冒泡，避免影响画布拖动
