@@ -269,7 +269,7 @@ const selectedObject = computed(() => canvasStore.selectedObject)
 
 // 从UI Store获取浮动参数控制栏拖动状态
 const isDragging = computed(() => uiStore.floatingParam.isDragging)
-
+let dragStartSnapshotList = null;
 // 文本属性
 const textContent = ref('')
 const fontFamily = ref('Arial')
@@ -331,127 +331,196 @@ const recordToggleAction = (display, property, currentValue) => {
 
 //处理鼠标按下
 const handleSliderDragStart = (property, display) => {
-    
-    dragDisplayId = display.id;
-    dragStartProps = capturePropsSnapshot(display);
-    console.log(dragStartProps) 
+    const selectedList = canvasStore.renderer.selectedObjects;
+    dragStartSnapshotList = selectedList.map(display => ({
+        id: display.id,
+        startProps: capturePropsSnapshot(display) 
+    }));
+    console.log(dragStartSnapshotList) 
     uiStore.setFloatingParamDragging(true); 
     console.log('--- Drag Start (快照捕获) ---'); 
 };
 //处理鼠标拖拽
+
 const handleSliderInput = (property, value) => {
-    if (!selectedObject.value) return;
-    const currentDisplay = selectedObject.value;
-    const props = {};
-    
-    // 检查是否为图片元素
-    const isPicture = currentDisplay.imageUrl !== undefined;
-    
-    if (currentDisplay._shape && currentDisplay._shape.type === 'text') {
-        props[property] = value;
-        // 实时应用文本属性变化
-        canvasStore.renderer.updateShape(currentDisplay, props);
+    const selectedList = canvasStore.renderer.selectedObjects; 
+
+    if (!selectedList || selectedList.length === 0) return;
+    const numericValue = (typeof value === 'string' && !isNaN(Number(value))) ? Number(value) : value;
+    selectedList.forEach(currentDisplay => {
+        const props = {};
+        const isPicture = currentDisplay.imageUrl !== undefined;
         
-    } else if (isPicture) {
-        // 图片元素处理
-        if (property === 'scale') {
-            const scaleValue = Number(value);
-            props.scale = { x: scaleValue, y: scaleValue };
-            imageScale.value = scaleValue;
-            // 实时应用缩放变化
-            canvasStore.renderer.updateShape(currentDisplay, props);
-        } else if (property === 'filters') {
-            // 实时应用滤镜变化
-            props.filters = value;
-            imageFilter.value = value;
-            canvasStore.renderer.updateShape(currentDisplay, props);
+        if (currentDisplay._shape && currentDisplay._shape.type === 'text') {
+            // 文本元素 (如 font-size, background, color)
+            props[property] = numericValue; 
+            
+        } else if (isPicture) {
+            // 图片元素处理
+            if (property === 'scale') {
+                props.scale = { x: numericValue, y: numericValue };
+            } else if (property === 'filters') {
+                // 滤镜属性
+                props.filters = value; 
+            } else {
+                props[property] = numericValue;
+            }
+        } else if (currentDisplay._shape) {
+            props[property] = numericValue;
         }
-    } else if (currentDisplay._shape) {
-        props[property] = value;
+
         canvasStore.renderer.updateShape(currentDisplay, props);
+    }); 
+    const firstDisplay = selectedList[0]; 
+    if (firstDisplay) {
+        // 你的原始 switch 逻辑，用于同步滑块/输入框的 UI 状态
+        switch(property){
+          case 'width': shapeWidth.value = numericValue; break;
+          case 'height': shapeHeight.value = numericValue; break;
+          case 'radius': radius.value = numericValue; break;
+          case 'size': triangleSize.value = numericValue; break;
+          case 'border-width': borderWidth.value = numericValue; break;
+          case 'opacity': opacity.value = numericValue; break;
+          case 'font-size': fontSize.value = numericValue; break; 
+          case 'background': background.value = value; break;
+          case 'border-color' : borderColor.value = value; break;
+          case 'color' : color.value = value; break;
+          // 确保 scale 和 filters 也被 UI 状态捕获
+          case 'scale': imageScale.value = numericValue; break;
+          case 'filters': imageFilter.value = value; break;
+        }
     }
     
-    switch(property){
-      case 'width':
-        shapeWidth.value = value;
-        break;
-      case 'height':
-        shapeHeight.value = value;
-        break;
-      case 'radius':
-        radius.value = value;
-        break;
-      case 'size': 
-        triangleSize.value = value;
-        break;
-      case 'border-width':
-        borderWidth.value = value;
-        break;
-      case 'opacity':
-        opacity.value = value;
-        break;
-      case 'font-size':
-        fontSize.value = value;
-        break; 
-      case 'background':
-        background.value = value;
-        break;
-      case 'border-color' :
-        borderColor.value = value;
-        break;
-      case 'color' :
-        color.value = value;
-        break;
-    }
 };
 
 //处理鼠标结束拖拽
+// const handleSliderDragEnd = (property, value) => {
+//     const currentDisplay = selectedObject.value;
+//     uiStore.setFloatingParamDragging(false); 
+//     if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
+//         dragStartProps = null;
+//         dragDisplayId = null;
+//         return;
+//     }
+    
+//     // 确保最终值已应用
+//     const props = {};
+//     props[property] = value;
+//     canvasStore.renderer.updateShape(currentDisplay, props);
+//     const displayId = currentDisplay.id;
+//     const finalProps = capturePropsSnapshot(currentDisplay);
+//     const startPropsForHistory = dragStartProps;
+    
+//     // 获取元素类型用于历史记录
+//     const elementType = currentDisplay.imageUrl !== undefined ? 'picture' : (currentDisplay._shape?.type || currentDisplay.type || 'unknown');
+    
+//     // 记录合并的历史操作
+//     if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
+//         historyStore.recordAction({
+//             type: `slide_change_${elementType}`,
+//             undo: () => {
+//               const activeObj = canvasStore.getObjectById(displayId);
+//               if(activeObj){
+//                 canvasStore.renderer.updateShape(activeObj, startPropsForHistory)
+//                 canvasStore.notifyObjectsChange()
+//               }
+//             },
+            
+//             redo: () => {
+//               const activeObj = canvasStore.getObjectById(displayId)
+//               if(activeObj){
+//                 canvasStore.renderer.updateShape(activeObj, finalProps)
+//               }
+//             }
+//           });
+//         console.log('--- Drag End (合并历史记录) ---'); // 检查点
+//         console.log(finalProps)
+//     }
+
+//     // 重置状态
+//     dragStartProps = null;
+//     dragDisplayId = null;
+// };
+// 处理鼠标结束拖拽 (修正版)
 const handleSliderDragEnd = (property, value) => {
-    const currentDisplay = selectedObject.value;
-    uiStore.setFloatingParamDragging(false); 
-    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
-        dragStartProps = null;
-        dragDisplayId = null;
+    
+    // 确保我们有起始快照列表
+    const startSnapshotList = dragStartSnapshotList;
+    if (!startSnapshotList || startSnapshotList.length === 0) {
+        dragStartSnapshotList = null;
+        uiStore.setFloatingParamDragging(false); 
         return;
     }
     
-    // 确保最终值已应用
-    const props = {};
-    props[property] = value;
-    canvasStore.renderer.updateShape(currentDisplay, props);
-    const displayId = currentDisplay.id;
-    const finalProps = capturePropsSnapshot(currentDisplay);
-    const startPropsForHistory = dragStartProps;
+    uiStore.setFloatingParamDragging(false); 
     
-    // 获取元素类型用于历史记录
-    const elementType = currentDisplay.imageUrl !== undefined ? 'picture' : (currentDisplay._shape?.type || currentDisplay.type || 'unknown');
-    
-    // 记录合并的历史操作
-    if (JSON.stringify(dragStartProps) !== JSON.stringify(finalProps)) {
+    // 1. 批量确保最终值已应用 (这一步由 handleSliderInput 保证，但为安全再做一次)
+    const selectedList = canvasStore.renderer.selectedObjects;
+    if (selectedList && selectedList.length > 0) {
+        const props = {};
+        props[property] = value;
+        selectedList.forEach(display => {
+             // 确保 updateShape 传入的是正确的属性
+             canvasStore.renderer.updateShape(display, props);
+        });
+    }
+
+    // 2. 捕获最终快照列表
+    const finalSnapshotList = startSnapshotList.map(startItem => {
+        const display = canvasStore.getObjectById(startItem.id);
+        if (display) {
+            return {
+                id: display.id,
+                finalProps: capturePropsSnapshot(display)
+            };
+        }
+        return null; 
+    }).filter(item => item !== null);
+
+    // 3. 检查是否有实际变化
+    const hasChanged = startSnapshotList.some(startItem => {
+        const finalItem = finalSnapshotList.find(f => f.id === startItem.id);
+        // 比较初始快照和最终快照的 JSON 字符串
+        return finalItem && (JSON.stringify(startItem.startProps) !== JSON.stringify(finalItem.finalProps));
+    });
+
+
+    if (hasChanged) {
+        // 记录合并的历史操作
         historyStore.recordAction({
-            type: `slide_change_${elementType}`,
+            type: `slide_change_batch_${property}`,
+            
+            // 撤销：遍历初始快照列表，恢复所有元素
             undo: () => {
-              const activeObj = canvasStore.getObjectById(displayId);
-              if(activeObj){
-                canvasStore.renderer.updateShape(activeObj, startPropsForHistory)
-                canvasStore.notifyObjectsChange()
-              }
+                startSnapshotList.forEach(item => {
+                    const activeObj = canvasStore.getObjectById(item.id);
+                    if(activeObj){
+                      // 🌟 关键：使用 item.startProps 恢复
+                      canvasStore.renderer.updateShape(activeObj, item.startProps);
+                    }
+                });
+                canvasStore.notifyObjectsChange();
             },
             
+            // 重做：遍历最终快照列表，恢复所有元素
             redo: () => {
-              const activeObj = canvasStore.getObjectById(displayId)
-              if(activeObj){
-                canvasStore.renderer.updateShape(activeObj, finalProps)
-              }
+                finalSnapshotList.forEach(item => {
+                    const activeObj = canvasStore.getObjectById(item.id);
+                    if(activeObj){
+                      // 🌟 关键：使用 item.finalProps 重做
+                      canvasStore.renderer.updateShape(activeObj, item.finalProps);
+                    }
+                });
+                canvasStore.notifyObjectsChange();
             }
-          });
-        console.log('--- Drag End (合并历史记录) ---'); // 检查点
-        console.log(finalProps)
+        });
+        console.log(`--- Drag End (合并 ${startSnapshotList.length} 个元素的批量历史) ---`);
+    } else {
+        console.log('--- Drag End (无变化，跳过历史记录) ---');
     }
 
     // 重置状态
-    dragStartProps = null;
-    dragDisplayId = null;
+    dragStartSnapshotList = null; // 🌟 新的状态变量
 };
 
 //文本处理开始
