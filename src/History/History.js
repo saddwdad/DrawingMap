@@ -4,6 +4,7 @@ import { nextUniqueId } from './idGenerator'
 import { markRaw } from 'vue'
 import { serializePixiObjects } from '@/LocalStorage/localCache'
 import { Item } from 'ant-design-vue/es/menu'
+import { faL } from '@fortawesome/free-solid-svg-icons'
 // 操作类型枚举（可选，用于区分操作）
 export const ActionType = {
   ADD_PICTURE: 'add_picture',
@@ -168,6 +169,7 @@ export const useHistoryStore = defineStore('history', {
       try{
         const canvasStore = useCanvasStore()
         const newDisplays = []
+        const newIds = []
         const fixedOffsetX = 10; 
         const fixedOffsetY = 10;
         const refX = copiedSelection[0].x; 
@@ -182,13 +184,17 @@ export const useHistoryStore = defineStore('history', {
               item.id = nextUniqueId();
               const newDisplay = await canvasStore.reconstructItem(item); 
               newDisplays.push(newDisplay);
+              newIds.push(newDisplay.id)
               console.log(`粘贴成功，共创建 ${newDisplays.length} 个对象。`);
           }
+          // this.isOperating = fale;
           canvasStore.forceViewpotUpdate()
 
         } catch(err){
           console.log('粘贴失败',err)
           return
+        } finally{
+          this.isOperating = false
         }
     }
 
