@@ -147,7 +147,9 @@
             max="1" 
             step="0.1" 
             :value="opacity"
-            @input="updateShapeProperty('opacity', Number($event.target.value))"
+            @mousedown="handleSliderDragStart('opacity', selectedObject)"
+            @input="handleSliderInput('opacity', $event.target.value)"
+            @change="handleSliderDragEnd('opacity', $event.target.value)"
           >
           <span class="slider-value">{{ opacity }}</span>
         </div>
