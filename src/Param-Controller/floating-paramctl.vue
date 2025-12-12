@@ -599,7 +599,6 @@ const updatePictureProperty = (property, value) => {
 //捕获当前对象属性
 const capturePropsSnapshot = (display) => {
     if (!display) return {};
-    const rawDisplay = display
     // 检查是否为图片元素
     const isPicture = display.imageUrl !== undefined;
     

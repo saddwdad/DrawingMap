@@ -19,6 +19,20 @@
     >
       重做 (Ctrl+Alt+Z)
     </div>
+    <!-- 复制 -->
+    <div class="menu-item"
+        :class="{ disabled: !canvasStore.renderer.selectedObjects.length>0}"
+        @click="handleCopy"
+    >
+      复制 (Ctrl+C)
+    </div>
+    <!-- 粘贴 -->
+    <div class="menu-item"
+        :class="{ disabled: !historyStore.canPaste}"
+        @click="handlePaste"
+    >
+      粘贴 (Ctrl+V)
+    </div>
     <!-- 清空历史 -->
     <div class="menu-divider"></div>
     <div
@@ -34,12 +48,16 @@
 <script setup>
 import { useHistoryStore } from '@/History/History'
 import { useContextMenuStore } from '@/Main-page/contextMenu/contextMenu'
-import { onMounted, onUnmounted } from 'vue'
-
+import { useCanvasStore } from '@/Main-page/Store/canvasStore'
+import { onMounted, onUnmounted, ref } from 'vue'
+const canvasStore = useCanvasStore()
 const historyStore = useHistoryStore()
 const contextMenuStore = useContextMenuStore()
+// History.vue 顶层
+const mouseScreenX = ref(0);
+const mouseScreenY = ref(0);
 
-// 撤销操作：直接调用 historyStore.undo()，并打印日志确认
+
 const handleUndo = () => {
   console.log("=== 撤销按钮事件链路 ===")
   console.log("1. 鼠标按下日志（已触发）")
@@ -74,6 +92,39 @@ const handleClearHistory = () => {
   contextMenuStore.hideMenu()
 }
 
+//复制
+const handleCopy = (display) => {
+  const selectedObjects = canvasStore.renderer?.selectedObjects;
+  if(selectedObjects && selectedObjects.length > 0){
+    historyStore.copyItem(selectedObjects)
+    contextMenuStore.hideMenu()
+    
+  }
+}
+//粘贴
+const handlePaste = () => {
+  if(!historyStore.canPaste){
+    console.log('无可粘贴内容')
+    return
+  }
+  const screenPos = { x: mouseScreenX.value, y: mouseScreenY.value };
+  const stagePos = canvasStore.renderer.stage.toLocal(screenPos);
+  historyStore.pasteItem(stagePos.x, stagePos.y);
+  contextMenuStore.hideMenu();
+}
+
+const updateMousePos = (e) => {
+    mouseScreenX.value = contextMenuStore.left 
+    mouseScreenY.value = contextMenuStore.top
+};
+onMounted(() => {
+    window.addEventListener('mousemove', updateMousePos);
+});
+
+
+onUnmounted(() => {
+    window.removeEventListener('mousemove', updateMousePos);
+});
 </script>
 
 <style>

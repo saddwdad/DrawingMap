@@ -146,7 +146,13 @@ const {
     endDrag,
     isDragging
 } = canvasStore
-
+const mouseX = ref(0);
+const mouseY = ref(0);
+const updateMousePos = (e) => {
+    // 鼠标在浏览器视口中的坐标（e.clientX / e.clientY）
+    mouseX.value = e.clientX; 
+    mouseY.value = e.clientY;
+};
 // 橡皮擦拖拽状态：左键按下为 true，松开/离开为 false
 const isErasing = ref(false)
 const objects = computed(() => canvasStore.renderer?.objects || [])
@@ -619,6 +625,18 @@ function handleKeyDown(event) {
                     historyStore.undo(); 
                 }
             }
+        } else if( isCtrlKey && event.key === 'c' ){
+          event.preventDefault(); 
+          if(canvasStore.renderer.selectedObjects.length>0){
+            historyStore.copyItem(canvasStore.renderer.selectedObjects)
+          }
+        } else if( isCtrlKey && event.key === 'v' ){
+          event.preventDefault(); 
+          if(historyStore.canPaste){
+            const screenPos = { x: mouseX.value, y: mouseY.value };
+            const stagePos = canvasStore.renderer.stage.toLocal(screenPos);
+            historyStore.pasteItem(stagePos.x, stagePos.y)
+          }
         }
 }
 
@@ -673,7 +691,7 @@ onMounted(async () => {
   // 监听图片工具点击事件
   document.addEventListener('triggerFileInput', triggerFileInput);
   document.addEventListener('keydown', handleKeyDown)
-
+  window.addEventListener('mousemove', updateMousePos);
 
   renderer.initCanvasEvents(app.stage);
 })
@@ -717,6 +735,7 @@ onUnmounted(() => {
   // 移除图片工具事件监听器
   document.removeEventListener('triggerFileInput', triggerFileInput);
   document.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('mousemove', updateMousePos);
 })
 
 

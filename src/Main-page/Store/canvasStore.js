@@ -211,6 +211,9 @@ export const useCanvasStore = defineStore('canvas', {
     scalePercent: (state) => `${Math.round(state.viewport.scale * 100)}%`,
   },
   actions: {
+
+
+
     //非响应式，手动设置触发器进行对象更新
     notifyObjectsChange(){
       this.$patch( state => {
@@ -436,11 +439,6 @@ export const useCanvasStore = defineStore('canvas', {
         const historyStore = useHistoryStore()
         if (!this.renderer) return console.log("无渲染器")
         if (!Array.isArray(this.objects)) this.objects = []
-
-        let startProps = null
-        const topAction = historyStore.getTopAction;
-
-
         // 形状场景
         if (!this.pendingItem) return console.log("无预渲染")
         let shapeItem = this.pendingItem

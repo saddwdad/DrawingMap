@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { useCanvasStore } from '@/Main-page/Store/canvasStore'
 import { nextUniqueId } from './idGenerator'
 import { markRaw } from 'vue'
+import { serializePixiObjects } from '@/LocalStorage/localCache'
+import { Item } from 'ant-design-vue/es/menu'
 // 操作类型枚举（可选，用于区分操作）
 export const ActionType = {
   ADD_PICTURE: 'add_picture',
@@ -15,11 +17,13 @@ export const useHistoryStore = defineStore('history', {
     undoStack: markRaw([]),       // 存储可撤销的操作
     redoStack: markRaw([]),       // 存储可重做的操作
     historyLimit: 30,    // 历史记录上限
-    isOperating: false   // 防止操作中重复记录
+    isOperating: false ,  // 防止操作中重复记录
+    copyOptionsStack: []
   }),
   getters: {
     canUndo: (state) => state.undoStack.length > 0,
     canRedo: (state) => state.redoStack.length > 0,
+    canPaste: (state) => state.copyOptionsStack.length > 0,
     undoCount: (state) => state.undoStack.length,
     redoCount: (state) => state.redoStack.length,
   },
@@ -131,18 +135,63 @@ export const useHistoryStore = defineStore('history', {
       this.notifyCanvas('clear')
     },
 
-    /**
-     * 通知 canvasStore 状态变化（可选，解耦用）
-     * 如需 canvasStore 做额外处理（如清空选中），可在 canvasStore 中监听
-     */
+
     notifyCanvas(type) {
       // 可通过 pinia 的订阅或事件总线通知，这里简化为直接调用（也可移除）
       const canvasStore = useCanvasStore()
       if (canvasStore && typeof canvasStore.clearSelection === 'function') {
         canvasStore.clearSelection()
       }
-    }
+    },
     
+    copyItem(display){
+      if(!Array.isArray(display) || display.length === 0) return
+      const canvasStore = useCanvasStore()
+      const originalData =  serializePixiObjects(display);
+      const copy = JSON.parse(JSON.stringify(originalData));
+      this.copyOptionsStack.push(copy)
+      console.log('复制的内容是',this.copyOptionsStack)
+    },
+
+    async pasteItem(targetX, targetY){
+      if(!this.canPaste){
+        console.log('无可粘贴内容')
+        return
+      }
+      const copiedSelection = this.copyOptionsStack.pop(); 
+    
+      if (!Array.isArray(copiedSelection) || copiedSelection.length === 0) {
+          console.log('复制栈为空或数据无效');
+          return;
+      }
+      this.isOperating = true;
+      try{
+        const canvasStore = useCanvasStore()
+        const newDisplays = []
+        const fixedOffsetX = 10; 
+        const fixedOffsetY = 10;
+        const refX = copiedSelection[0].x; 
+        const refY = copiedSelection[0].y;
+        
+        for (const item of copiedSelection) {
+            
+              const relativeOffsetX = item.x - refX;
+              const relativeOffsetY = item.y - refY;
+              item.x = targetX + fixedOffsetX + relativeOffsetX;
+              item.y = targetY + fixedOffsetY + relativeOffsetY;
+              item.id = nextUniqueId();
+              const newDisplay = await canvasStore.reconstructItem(item); 
+              newDisplays.push(newDisplay);
+              console.log(`粘贴成功，共创建 ${newDisplays.length} 个对象。`);
+          }
+          canvasStore.forceViewpotUpdate()
+
+        } catch(err){
+          console.log('粘贴失败',err)
+          return
+        }
+    }
+
   },
   persist: {
     enabled: false

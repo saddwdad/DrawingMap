@@ -625,7 +625,7 @@ export class Renderer {
         offsetY: 0
       };
       
-      
+
       // 获取canvas元素
       const canvas = this.appStage?.parent?.canvas || document.querySelector('canvas');
       
@@ -890,37 +890,6 @@ export class Renderer {
       parseInt(result[1], 16) << 16 | parseInt(result[2], 16) << 8 | parseInt(result[3], 16) :
       0xffffff;
   }
-  // 擦除：将局部坐标转换为全局坐标，
-  // // 使用圆-矩形最近点测试判定命中对象并移除，返回删除数量
-  // eraseAt(x, y, radius) {
-  //   const p = new PIXI.Point(x, y)
-  //   const gp = this.stage.toGlobal(p)
-  //   const removed = []
-  //   for (let i = 0; i < this.objects.length; i++) {
-  //     const obj = this.objects[i]
-  //     const b = obj.getBounds()
-  //     const cx = gp.x
-  //     const cy = gp.y
-  //     const rx = Math.max(b.x, Math.min(cx, b.x + b.width))
-  //     const ry = Math.max(b.y, Math.min(cy, b.y + b.height))
-  //     const dx = cx - rx
-  //     const dy = cy - ry
-  //     if (dx * dx + dy * dy <= radius * radius) {
-  //       this.stage.removeChild(obj)
-  //       obj.destroy?.()
-  //       removed.push(obj)
-  //     }
-  //   }
-  //   if (removed.length) {
-  //     this.objects = this.objects.filter(o => !removed.includes(o))
-  //     if (this.canvasStore && this.canvasStore.objects) {
-  //       this.canvasStore.objects = this.canvasStore.objects.filter(o => !removed.includes(o));
-  //     }
-  //     this.renderMiniMap();
-
-  //   }
-  //   return removed.length
-  // }
 
       eraseAt(x, y, radius) {
       // 1. 确保 this.objects 是一个数组
@@ -1311,4 +1280,6 @@ export class Renderer {
     }
     return foundObject
   }
+
+
 }
