@@ -222,13 +222,14 @@ try{
                     canvasStore.renderer.stage.addChild(obj); 
                 });
                 canvasStore.forceViewpotUpdate()
-                renderer.app.renderer.render(renderer.app.stage);
+                // renderer.app.renderer.render(renderer.app.stage);
             }
         message.success(`成功解析文件!`);
         closeUploadModal();
     }
 } catch(e) {
         message.error("文件解析失败或数据无效！请检查文件是否完整。");
+        console.log(error)
     }
     return false;
 
