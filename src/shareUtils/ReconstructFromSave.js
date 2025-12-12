@@ -71,7 +71,6 @@ export function parseFileToRawData(file) {
             console.error("读取文件时发生错误:", error);
             resolve(null);
         };
-
         // 以文本格式读取文件内容
         reader.readAsText(file);
     });

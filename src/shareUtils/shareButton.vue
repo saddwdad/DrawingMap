@@ -192,6 +192,8 @@ const handleImportLink = async () => {
                     canvasStore.objects.push(obj); 
                     canvasStore.renderer.stage.addChild(obj); 
                 });
+                canvasStore.forceViewpotUpdate()
+                renderer.app.renderer.render(renderer.app.stage);
             }
         message.success(`成功解析链接，导入了 ${rawData.objects.length} 个元素!`);
         closeUploadModal();
@@ -219,6 +221,8 @@ try{
                     canvasStore.objects.push(obj); 
                     canvasStore.renderer.stage.addChild(obj); 
                 });
+                canvasStore.forceViewpotUpdate()
+                renderer.app.renderer.render(renderer.app.stage);
             }
         message.success(`成功解析文件!`);
         closeUploadModal();
