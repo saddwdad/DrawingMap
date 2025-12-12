@@ -471,13 +471,14 @@ const handleTextEditEnd = (newValue) => {
     const currentDisplay = selectedObject.value;
     
 
-    if (!currentDisplay || !dragStartProps || dragDisplayId !== currentDisplay.id) {
-        dragStartProps = null;
-        dragDisplayId = null;
+    if (!currentDisplay || !textStartProps || textDisplayId !== currentDisplay.id) {
+        textStartProps = null;
+        textDisplayId = null;
         return;
     }
     const finalProps = capturePropsSnapshot(currentDisplay);
     finalProps.text = newValue; 
+    console.log('新文本内容',finalProps)
     const startPropsForHistory = textStartProps;
     if (startPropsForHistory.text !== finalProps.text) {
         

@@ -590,297 +590,529 @@ export class Renderer {
   }
   
   // 将图形对象添加到舞台并设置位置
-  addToStage(display, x, y, existingId = null) {
-    const canvasStore = useCanvasStore()
-    const historyStore = useHistoryStore()
-    console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
-    display.position.set(x, y)
-    this.stage.addChild(display)
-    this.objects.push(display)
-    display.id = existingId || nextUniqueId()
-    this.objectMap.push(display.id)
-    console.log(`x: ${x}, y: ${y}`)
-    if (this.canvasStore && this.canvasStore.objects) {
-      this.canvasStore.objects.push(markRaw(display));
-    }
-    if (display.needsRenderFix === undefined) {
-      display.needsRenderFix = false; 
-    }
-    if(this.canvasStore){
-      canvasStore.notifyObjectsChange()
-    }
+  // addToStage(display, x, y, existingId = null) {
+  //   const canvasStore = useCanvasStore()
+  //   const historyStore = useHistoryStore()
+  //   console.log('Renderer.addToStage', { x, y, type: display?.constructor?.name })
+  //   display.position.set(x, y)
+  //   this.stage.addChild(display)
+  //   this.objects.push(display)
+  //   display.id = existingId || nextUniqueId()
+  //   this.objectMap.push(display.id)
+  //   console.log(`x: ${x}, y: ${y}`)
+  //   if (this.canvasStore && this.canvasStore.objects) {
+  //     this.canvasStore.objects.push(markRaw(display));
+  //   }
+  //   if (display.needsRenderFix === undefined) {
+  //     display.needsRenderFix = false; 
+  //   }
+  //   if(this.canvasStore){
+  //     canvasStore.notifyObjectsChange()
+  //   }
     
-    // 选择支持：绑定指针事件，点击通知外部选中
-    try {
-      display.eventMode = 'static';
-      display.cursor = 'pointer';
+  //   // 选择支持：绑定指针事件，点击通知外部选中
+  //   try {
+  //     display.eventMode = 'static';
+  //     display.cursor = 'pointer';
       
-      // 存储当前渲染器引用，用于事件处理函数
-      const renderer = this;
+  //     // 存储当前渲染器引用，用于事件处理函数
+  //     const renderer = this;
       
-      // 拖动状态变量，使用闭包保存
-      const dragState = {
-        isDragging: false,
-        offsetX: 0,
-        offsetY: 0
-      };
+  //     // 拖动状态变量，使用闭包保存
+  //     const dragState = {
+  //       isDragging: false,
+  //       offsetX: 0,
+  //       offsetY: 0
+  //     };
       
 
-      // 获取canvas元素
-      const canvas = this.appStage?.parent?.canvas || document.querySelector('canvas');
+  //     // 获取canvas元素
+  //     const canvas = this.appStage?.parent?.canvas || document.querySelector('canvas');
       
-      if (!canvas) {
-        console.error('Canvas element not found for element drag event binding');
-        return;
+  //     if (!canvas) {
+  //       console.error('Canvas element not found for element drag event binding');
+  //       return;
+  //     }
+      
+
+  //     // 鼠标按下事件 - 开始拖动或组拖动
+  //     display.on('pointerdown', (e) => {
+  //       e.stopPropagation(); // 阻止事件冒泡，避免影响画布拖动
+  //       const canvasStore = useCanvasStore()
+  //       const currentTool = canvasStore.currentTool;
+  //       // 点击选中对象（如果不是多选状态，则清除之前的选择）
+  //       if(currentTool === 'select'){
+  //           if (typeof renderer.onSelect === 'function') {
+  //             renderer.onSelect(display);
+  //           }
+            
+  //           // 检查是否在多选状态下
+  //           if (renderer.selectedObjects.length > 1 && renderer.selectedObjects.includes(display)) {
+  //             // 开始组拖动
+  //             renderer.isDraggingGroup = true;
+              
+  //             // 计算鼠标相对于元素位置的偏移量
+  //             const firstObj = renderer.selectedObjects[0];
+  //             const stageClickPos = renderer.stage.toLocal(e.global);
+  //             const localPos = display.toLocal(e.global);
+  //             renderer.dragOffset.x = stageClickPos.x - firstObj.position.x;
+  //             renderer.dragOffset.y = stageClickPos.y - firstObj.position.y;
+  //           } else {
+  //             // 单选拖动
+  //             // 开始拖动
+  //             dragState.isDragging = true;
+              
+  //             // 计算鼠标相对于元素位置的偏移量
+  //             const localPos = display.toLocal(e.global);
+  //             dragState.offsetX = localPos.x;
+  //             dragState.offsetY = localPos.y;
+  //           }
+  //           if (!renderer.isDraggingGroup && !renderer.selectedObjects.includes(display)) {
+  //       // 如果是单选拖动，selectedObjects 应该只有这一个
+  //               renderer.selectedObjects = [display]; 
+  //               // 警告：如果 selectedObjects 是 Pinia Store 的 state 并且不能直接覆盖，
+  //               // 你可能需要调用一个 Pinia Action：canvasStore.setSelectedObjects([display])。
+  //               // 但既然你之前是直接 .map()，我们假设它可以被直接赋值。
+  //           }
+  //           this.dragStartSnapshot = this.selectedObjects.map(obj => ({
+  //               id: obj.id,
+  //               x: obj.position.x,
+  //               y: obj.position.y
+  //           }));
+  //           console.log('最早的他妈的位置',renderer.dragStartSnapshot)
+  //           display.cursor = 'grabbing';
+  //       }
+  //     });
+      
+  //     // 鼠标移动事件 - 拖动元素或组
+  //     display.on('pointermove', (e) => {
+
+  //       // 处理组拖动
+  //       if (renderer.isDraggingGroup) {
+  //         // e.stopPropagation(); // 阻止事件冒泡
+          
+  //         let shouldForceRender = false; 
+  //         const objectsToIsolate = []; // 存放需要被保护的新图形
+  //         // 计算新位置
+  //         const globalPos = e.global;
+  //         const stagePos = renderer.stage.toLocal(globalPos);
+          
+  //         // 计算移动距离
+  //         const deltaX = stagePos.x - renderer.dragOffset.x;
+  //         const deltaY = stagePos.y - renderer.dragOffset.y;
+          
+          
+  //         // 检查是否有选中的对象
+  //         if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
+  //           console.warn('No selected objects for group dragging');
+  //           return;
+  //         }
+  //         if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
+  //         renderer.isDraggingGroup = false; 
+  //         return;
+  //         }
+  //         // 移动选中的第一个元素到新位置
+  //         const firstObj = renderer.selectedObjects[0];
+  //         if (!firstObj || !firstObj.position) {
+  //           console.warn('Invalid first object for group dragging');
+  //           return;
+  //         }
+  //         console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
+  //         const firstDeltaX = deltaX - firstObj.position.x;
+  //         const firstDeltaY = deltaY - firstObj.position.y;
+          
+  //         // 移动所有选中的元素
+  //         renderer.selectedObjects.forEach(obj => {
+            
+  //           if (obj && obj.position) {
+  //             obj.position.x += firstDeltaX;
+  //             obj.position.y += firstDeltaY;
+  //           }
+  //           if (obj.needsRenderFix === true) {
+  //             shouldForceRender = true;
+  //             if (renderer.app && renderer.app.renderer) {
+  //               renderer.app.renderer.render(renderer.app.stage);
+  //             }
+  //           } 
+  //           // if (obj.needsRenderFix === false) {
+  //           //  objectsToIsolate.push(obj);
+  //           // }
+
+
+  //           // 找出需要被保护的新图形
+  //         });
+  //         // if (shouldForceRender) {
+    
+  //         //       objectsToIsolate.forEach(obj => {
+  //         //         console.log('删了没我操')
+  //         //           obj.visible = false; 
+  //         //       });
+
+  //         //       // 2. 强制渲染整个舞台 (World Transform 仅刷新剩下的，即需要修复的对象)
+  //         //       if (renderer.app && renderer.app.renderer) {
+  //         //           renderer.app.renderer.render(renderer.app.stage); 
+  //         //       }
+
+  //         //       // 3. 🌟 立即将新图形重新设置为可见
+  //         //       objectsToIsolate.forEach(obj => {
+  //         //         console.log('加了没我操')
+  //         //           obj.visible = true; 
+  //         //           if (obj.parent) {
+  //         //               // PIXI 方法：强制计算并应用此对象及其子对象的 World Transform 矩阵。
+  //         //               obj.parent.updateTransform(); 
+  //         //           }
+  //         //       });
+  //         // }
+          
+          
+
+  //         console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
+          
+
+
+  //         if (canvasStore.notifyObjectsChange) {
+  //             canvasStore.notifyObjectsChange(); 
+  //         }
+  //         return;
+  //       }
+        
+  //       // 处理单选拖动
+  //       if (!dragState.isDragging) return;
+        
+  //       // e.stopPropagation(); // 阻止事件冒泡
+        
+  //       // 计算元素的新位置
+  //       const newLocalPos = display.parent.toLocal(e.global);
+  //       display.position.x = newLocalPos.x - dragState.offsetX;
+  //       display.position.y = newLocalPos.y - dragState.offsetY;
+  //       if (canvasStore.notifyObjectsChange) {
+  //         canvasStore.notifyObjectsChange(); 
+  //       }
+  //       if(display.needsRenderFix){
+  //         console.log('执行了没他妈的操')
+  //         if (this.app && this.app.renderer) {
+  //           console.log('执行到强制渲染')
+  //           this.app.renderer.render(this.app.stage);
+  //         }
+  //       }
+  //       if (canvasStore.notifyObjectsChange) {
+  //             canvasStore.notifyObjectsChange(); 
+  //       }
+  //       console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
+  //     });
+      
+  //     // 鼠标抬起事件 - 结束拖动
+  //     display.on('pointerup', () => {
+  //       // 结束组拖动
+  //       if (renderer.isDraggingGroup) {
+  //         renderer.isDraggingGroup = false;
+  //       }
+        
+  //       // 结束单选拖动
+  //       if (dragState.isDragging) {
+  //         dragState.isDragging = false;
+  //       }
+  //       const dragEndSnapshot = this.selectedObjects.map(obj => ({
+  //       id: obj.id,
+  //       x: obj.position.x,
+  //       y: obj.position.y
+  //     }));
+  //     console.log('最后的他妈的位置',dragEndSnapshot)
+
+  //     const startSnapshotForHistory = this.dragStartSnapshot;
+
+  //         // 检查是否有实际移动发生（防止无效的历史记录）
+  //         if (JSON.stringify(startSnapshotForHistory) !== JSON.stringify(dragEndSnapshot)) {
+        
+  //           historyStore.recordAction({
+  //                     type: `move_group_${this.selectedObjects.length > 1 ? 'multiple' : 'single'}`,
+                      
+  //                     // 撤销操作：将每个对象恢复到开始时的位置
+  //                     undo: () => {
+  //                         startSnapshotForHistory.forEach(startProp => {
+  //                             const obj = this.canvasStore.getObjectById(startProp.id);
+  //                             if (obj) {
+  //                                 this.canvasStore.renderer.updateShape(obj, { 
+  //                                     x: startProp.x, 
+  //                                     y: startProp.y 
+  //                                 });
+  //                             }
+  //                         });
+  //                         this.canvasStore.notifyObjectsChange();
+  //                     },
+                      
+  //                     // 重做操作：将每个对象移动到结束时的位置
+  //                     redo: () => {
+  //                         dragEndSnapshot.forEach(endProp => {
+  //                             const obj = this.canvasStore.getObjectById(endProp.id);
+  //                             if (obj) {
+  //                                 this.canvasStore.renderer.updateShape(obj, { 
+  //                                     x: endProp.x, 
+  //                                     y: endProp.y 
+  //                                 });
+  //                             }
+  //                         });
+  //                         this.canvasStore.notifyObjectsChange();
+  //                     }
+  //                 });
+  //                 console.log('--- Drag End (记录移动历史记录) ---');
+  //         }
+
+  //         // 重置状态
+  //         display.cursor = 'pointer';
+  //       });
+      
+  //     // 鼠标移出元素事件 - 结束拖动
+  //     display.on('pointerupoutside', () => {
+  //       // 结束组拖动
+  //       if (renderer.isDraggingGroup) {
+  //         renderer.isDraggingGroup = false;
+  //       }
+        
+  //       // 结束单选拖动
+  //       if (dragState.isDragging) {
+  //         dragState.isDragging = false;
+  //       }
+        
+  //       display.cursor = 'pointer';
+  //     });
+      
+  //   } catch (error) {
+  //     console.error('Error adding event listeners to display object:', error);
+  //   }
+  //   return display
+  // }
+    _addDisplayObject(display, x, y, existingId = null) {
+      // ⚠️ 注意：这里假设 this 是 Renderer 实例
+      const canvasStore = this.canvasStore; // 确保 Renderer 实例上挂载了 canvasStore 引用
+
+      // 1. 设置 PIXI 属性和添加到舞台
+      display.position.set(x, y);
+      this.stage.addChild(display);
+      
+      // 2. ID 和内部对象管理
+      display.id = existingId || nextUniqueId();
+      this.objects.push(display); // Renderer 内部的 objects 数组
+      this.objectMap.push(display.id); // 内部 ID 映射
+
+      // 3. Pinia Store 引用
+      if (canvasStore && canvasStore.objects) {
+          // 使用 markRaw 确保 Pinia Store 存储 PIXI 实例时不进行深度响应式代理
+          canvasStore.objects.push(markRaw(display));
       }
       
+      // 4. 特殊标记和 UI 通知
+      if (display.needsRenderFix === undefined) {
+        display.needsRenderFix = false; 
+      }
 
-      // 鼠标按下事件 - 开始拖动或组拖动
-      display.on('pointerdown', (e) => {
-        e.stopPropagation(); // 阻止事件冒泡，避免影响画布拖动
-        const canvasStore = useCanvasStore()
-        const currentTool = canvasStore.currentTool;
-        // 点击选中对象（如果不是多选状态，则清除之前的选择）
-        if(currentTool === 'select'){
-            if (typeof renderer.onSelect === 'function') {
-              renderer.onSelect(display);
-            }
-            
-            // 检查是否在多选状态下
-            if (renderer.selectedObjects.length > 1 && renderer.selectedObjects.includes(display)) {
-              // 开始组拖动
-              renderer.isDraggingGroup = true;
-              
-              // 计算鼠标相对于元素位置的偏移量
-              const firstObj = renderer.selectedObjects[0];
-              const stageClickPos = renderer.stage.toLocal(e.global);
-              const localPos = display.toLocal(e.global);
-              renderer.dragOffset.x = stageClickPos.x - firstObj.position.x;
-              renderer.dragOffset.y = stageClickPos.y - firstObj.position.y;
-            } else {
-              // 单选拖动
-              // 开始拖动
-              dragState.isDragging = true;
-              
-              // 计算鼠标相对于元素位置的偏移量
-              const localPos = display.toLocal(e.global);
-              dragState.offsetX = localPos.x;
-              dragState.offsetY = localPos.y;
-            }
-            if (!renderer.isDraggingGroup && !renderer.selectedObjects.includes(display)) {
-        // 如果是单选拖动，selectedObjects 应该只有这一个
-                renderer.selectedObjects = [display]; 
-                // 警告：如果 selectedObjects 是 Pinia Store 的 state 并且不能直接覆盖，
-                // 你可能需要调用一个 Pinia Action：canvasStore.setSelectedObjects([display])。
-                // 但既然你之前是直接 .map()，我们假设它可以被直接赋值。
-            }
-            this.dragStartSnapshot = this.selectedObjects.map(obj => ({
-                id: obj.id,
-                x: obj.position.x,
-                y: obj.position.y
-            }));
-            console.log('最早的他妈的位置',renderer.dragStartSnapshot)
-            display.cursor = 'grabbing';
-        }
-      });
+      if(canvasStore){
+        canvasStore.notifyObjectsChange(); // 通知外部 UI
+      }
       
-      // 鼠标移动事件 - 拖动元素或组
-      display.on('pointermove', (e) => {
+      return display;
+  }
 
-        // 处理组拖动
-        if (renderer.isDraggingGroup) {
-          // e.stopPropagation(); // 阻止事件冒泡
+  // ====================================================================
+  // B. 交互事件绑定 (原 bindInteractivity)
+  // ====================================================================
+  bindInteractivity(display, rendererInstance) {
+      try {
+          // 🚨 注意：Pinia Actions/Getters 必须在函数内部获取引用
+          const canvasStore = useCanvasStore(); 
+          const historyStore = useHistoryStore(); 
+          const renderer = rendererInstance;
+          // 确保能通过 renderer 访问到 Pinia Action 时的 this.canvasStore
+          const canvasStoreRef = renderer.canvasStore; 
           
-          let shouldForceRender = false; 
-          const objectsToIsolate = []; // 存放需要被保护的新图形
-          // 计算新位置
-          const globalPos = e.global;
-          const stagePos = renderer.stage.toLocal(globalPos);
-          
-          // 计算移动距离
-          const deltaX = stagePos.x - renderer.dragOffset.x;
-          const deltaY = stagePos.y - renderer.dragOffset.y;
-          
-          
-          // 检查是否有选中的对象
-          if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
-            console.warn('No selected objects for group dragging');
-            return;
+          // 强制设置交互模式
+          display.eventMode = 'static';
+          display.cursor = 'pointer';
+
+          // 拖动状态变量，使用闭包保存
+          const dragState = {
+              isDragging: false,
+              offsetX: 0,
+              offsetY: 0
+          };
+
+          // 确保容器内的子元素不可交互
+          if (display.type === 'group' || display instanceof PIXI.Container) {
+              display.children.forEach(child => {
+                  child.eventMode = 'none';
+              });
           }
-          if (!renderer.selectedObjects || renderer.selectedObjects.length === 0) {
-          renderer.isDraggingGroup = false; 
-          return;
-          }
-          // 移动选中的第一个元素到新位置
-          const firstObj = renderer.selectedObjects[0];
-          if (!firstObj || !firstObj.position) {
-            console.warn('Invalid first object for group dragging');
-            return;
-          }
-          console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
-          const firstDeltaX = deltaX - firstObj.position.x;
-          const firstDeltaY = deltaY - firstObj.position.y;
           
-          // 移动所有选中的元素
-          renderer.selectedObjects.forEach(obj => {
-            
-            if (obj && obj.position) {
-              obj.position.x += firstDeltaX;
-              obj.position.y += firstDeltaY;
-            }
-            if (obj.needsRenderFix === true) {
-              shouldForceRender = true;
-              if (renderer.app && renderer.app.renderer) {
-                renderer.app.renderer.render(renderer.app.stage);
-              }
-            } 
-            // if (obj.needsRenderFix === false) {
-            //  objectsToIsolate.push(obj);
-            // }
+          // --- 鼠标按下事件 (pointerdown) ---
+          display.on('pointerdown', (e) => {
+              console.log(`--- 💥 成功点击对象: ${display.id || 'N/A'} ---`); 
+              e.stopPropagation(); 
+              const currentTool = canvasStore.currentTool;
 
+              if (currentTool === 'select') {
+                  if (typeof renderer.onSelect === 'function') {
+                      renderer.onSelect(display);
+                  }
 
-            // 找出需要被保护的新图形
-          });
-          // if (shouldForceRender) {
-    
-          //       objectsToIsolate.forEach(obj => {
-          //         console.log('删了没我操')
-          //           obj.visible = false; 
-          //       });
-
-          //       // 2. 强制渲染整个舞台 (World Transform 仅刷新剩下的，即需要修复的对象)
-          //       if (renderer.app && renderer.app.renderer) {
-          //           renderer.app.renderer.render(renderer.app.stage); 
-          //       }
-
-          //       // 3. 🌟 立即将新图形重新设置为可见
-          //       objectsToIsolate.forEach(obj => {
-          //         console.log('加了没我操')
-          //           obj.visible = true; 
-          //           if (obj.parent) {
-          //               // PIXI 方法：强制计算并应用此对象及其子对象的 World Transform 矩阵。
-          //               obj.parent.updateTransform(); 
-          //           }
-          //       });
-          // }
-          
-          
-
-          console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
-          
-
-
-          if (canvasStore.notifyObjectsChange) {
-              canvasStore.notifyObjectsChange(); 
-          }
-          return;
-        }
-        
-        // 处理单选拖动
-        if (!dragState.isDragging) return;
-        
-        // e.stopPropagation(); // 阻止事件冒泡
-        
-        // 计算元素的新位置
-        const newLocalPos = display.parent.toLocal(e.global);
-        display.position.x = newLocalPos.x - dragState.offsetX;
-        display.position.y = newLocalPos.y - dragState.offsetY;
-        if (canvasStore.notifyObjectsChange) {
-          canvasStore.notifyObjectsChange(); 
-        }
-        if(display.needsRenderFix){
-          console.log('执行了没他妈的操')
-          if (this.app && this.app.renderer) {
-            console.log('执行到强制渲染')
-            this.app.renderer.render(this.app.stage);
-          }
-        }
-        if (canvasStore.notifyObjectsChange) {
-              canvasStore.notifyObjectsChange(); 
-        }
-        console.log('当前触发计数为：' ,canvasStore.objectChangeKey)
-      });
-      
-      // 鼠标抬起事件 - 结束拖动
-      display.on('pointerup', () => {
-        // 结束组拖动
-        if (renderer.isDraggingGroup) {
-          renderer.isDraggingGroup = false;
-        }
-        
-        // 结束单选拖动
-        if (dragState.isDragging) {
-          dragState.isDragging = false;
-        }
-        const dragEndSnapshot = this.selectedObjects.map(obj => ({
-        id: obj.id,
-        x: obj.position.x,
-        y: obj.position.y
-      }));
-      console.log('最后的他妈的位置',dragEndSnapshot)
-
-      const startSnapshotForHistory = this.dragStartSnapshot;
-
-          // 检查是否有实际移动发生（防止无效的历史记录）
-          if (JSON.stringify(startSnapshotForHistory) !== JSON.stringify(dragEndSnapshot)) {
-        
-            historyStore.recordAction({
-                      type: `move_group_${this.selectedObjects.length > 1 ? 'multiple' : 'single'}`,
+                  if (renderer.selectedObjects.length > 1 && renderer.selectedObjects.includes(display)) {
+                      // 组拖动
+                      renderer.isDraggingGroup = true;
+                      const firstObj = renderer.selectedObjects[0];
+                      const stageClickPos = renderer.stage.toLocal(e.global);
                       
-                      // 撤销操作：将每个对象恢复到开始时的位置
+                      renderer.dragOffset.x = stageClickPos.x - firstObj.position.x;
+                      renderer.dragOffset.y = stageClickPos.y - firstObj.position.y;
+
+                  } else {
+                      // 单选拖动
+                      dragState.isDragging = true;
+                      const localPos = display.toLocal(e.global);
+                      dragState.offsetX = localPos.x;
+                      dragState.offsetY = localPos.y;
+                      
+                      if (!renderer.isDraggingGroup && !renderer.selectedObjects.includes(display)) {
+                          renderer.selectedObjects = [display]; 
+                      }
+                  }
+                  
+                  // 记录拖动前的初始位置快照 (用于 History Store)
+                  renderer.dragStartSnapshot = renderer.selectedObjects.map(obj => ({
+                      id: obj.id,
+                      x: obj.position.x,
+                      y: obj.position.y
+                  }));
+
+                  display.cursor = 'grabbing';
+              }
+          });
+
+          // --- 鼠标移动事件 (pointermove) ---
+          display.on('pointermove', (e) => {
+              if (renderer.isDraggingGroup) {
+                  const globalPos = e.global;
+                  const stagePos = renderer.stage.toLocal(globalPos);
+                  const firstObj = renderer.selectedObjects[0];
+                  
+                  const newFirstX = stagePos.x - renderer.dragOffset.x;
+                  const newFirstY = stagePos.y - renderer.dragOffset.y;
+                  const deltaX = newFirstX - firstObj.position.x;
+                  const deltaY = newFirstY - firstObj.position.y;
+
+                  renderer.selectedObjects.forEach(obj => {
+                      if (obj && obj.position) {
+                          obj.position.x += deltaX;
+                          obj.position.y += deltaY;
+                      }
+                      if (obj.needsRenderFix === true) {
+                          if (renderer.app && renderer.app.renderer) {
+                              renderer.app.renderer.render(renderer.app.stage);
+                          }
+                      } 
+                  });
+
+                  canvasStore.notifyObjectsChange(); 
+                  return;
+              }
+              
+              // 处理单选拖动
+              if (!dragState.isDragging) return;
+              
+              const newLocalPos = display.parent.toLocal(e.global);
+              display.position.x = newLocalPos.x - dragState.offsetX;
+              display.position.y = newLocalPos.y - dragState.offsetY;
+              
+              canvasStore.notifyObjectsChange(); 
+              
+              if(display.needsRenderFix){
+                  if (renderer.app && renderer.app.renderer) {
+                      renderer.app.renderer.render(renderer.app.stage);
+                  }
+              }
+              canvasStore.notifyObjectsChange(); 
+          });
+
+          // --- 鼠标抬起事件 (pointerup) ---
+          display.on('pointerup', () => {
+              if (!dragState.isDragging && !renderer.isDraggingGroup) return; 
+
+              renderer.isDraggingGroup = false;
+              dragState.isDragging = false;
+              display.cursor = 'pointer';
+              
+              const dragEndSnapshot = renderer.selectedObjects.map(obj => ({
+                  id: obj.id,
+                  x: obj.position.x,
+                  y: obj.position.y
+              }));
+
+              const startSnapshotForHistory = renderer.dragStartSnapshot;
+
+              if (JSON.stringify(startSnapshotForHistory) !== JSON.stringify(dragEndSnapshot)) {
+                  historyStore.recordAction({
+                      type: `move_group_${renderer.selectedObjects.length > 1 ? 'multiple' : 'single'}`,
+                      
                       undo: () => {
                           startSnapshotForHistory.forEach(startProp => {
-                              const obj = this.canvasStore.getObjectById(startProp.id);
+                              const obj = canvasStoreRef.getObjectById(startProp.id);
                               if (obj) {
-                                  this.canvasStore.renderer.updateShape(obj, { 
+                                  canvasStoreRef.renderer.updateShape(obj, { 
                                       x: startProp.x, 
                                       y: startProp.y 
                                   });
                               }
                           });
-                          this.canvasStore.notifyObjectsChange();
+                          canvasStoreRef.notifyObjectsChange();
                       },
                       
-                      // 重做操作：将每个对象移动到结束时的位置
                       redo: () => {
                           dragEndSnapshot.forEach(endProp => {
-                              const obj = this.canvasStore.getObjectById(endProp.id);
+                              const obj = canvasStoreRef.getObjectById(endProp.id);
                               if (obj) {
-                                  this.canvasStore.renderer.updateShape(obj, { 
+                                  canvasStoreRef.renderer.updateShape(obj, { 
                                       x: endProp.x, 
                                       y: endProp.y 
                                   });
                               }
                           });
-                          this.canvasStore.notifyObjectsChange();
+                          canvasStoreRef.notifyObjectsChange();
                       }
                   });
                   console.log('--- Drag End (记录移动历史记录) ---');
-          }
+              }
+          });
 
-          // 重置状态
-          display.cursor = 'pointer';
-        });
+          // --- 鼠标抬起在外部 (pointerupoutside) ---
+          display.on('pointerupoutside', () => {
+              if (renderer.isDraggingGroup || dragState.isDragging) {
+                  renderer.isDraggingGroup = false;
+                  dragState.isDragging = false;
+                  display.cursor = 'pointer';
+              }
+          });
+
+      } catch (error) {
+          console.error('Error adding event listeners to display object:', error);
+      }
+  }
+
+
+  // ====================================================================
+  // C. 唯一的外部入口 (替代你原来的 addToStage)
+  // ====================================================================
+
+  /**
+   * [这是替代你原有 addToStage 的函数]
+   * 它作为封装层，内部调用 _addDisplayObject 和 bindInteractivity。
+   * 外部所有调用方无需修改。
+   */
+  addToStage(display, x, y, existingId = null) {
+      // 1. 调用初始化和添加到舞台的逻辑
+      const addedDisplay = this._addDisplayObject(display, x, y, existingId);
       
-      // 鼠标移出元素事件 - 结束拖动
-      display.on('pointerupoutside', () => {
-        // 结束组拖动
-        if (renderer.isDraggingGroup) {
-          renderer.isDraggingGroup = false;
-        }
-        
-        // 结束单选拖动
-        if (dragState.isDragging) {
-          dragState.isDragging = false;
-        }
-        
-        display.cursor = 'pointer';
-      });
-      
-    } catch (error) {
-      console.error('Error adding event listeners to display object:', error);
-    }
-    return display
+      // 2. 绑定交互事件
+      this.bindInteractivity(addedDisplay, this); 
+
+      return addedDisplay;
   }
 
   // 辅助方法：将十六进制颜色转换为RGB
