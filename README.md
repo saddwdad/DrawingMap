@@ -21,6 +21,8 @@
 - 小地图实时预览对象与视口，支持点击定位视口中心
 - 橡皮擦：左键拖动按轨迹擦除命中的对象
 
+### 关于AI生成
+- 首先用python运行BackPost里的ai2SVG.py，生成后端端口后输入到src\AIImage\AiImage.vue的第66行后端请求地址中。随后可以正常运行npm run dev。AI生成按钮在右上角
 
 
 
