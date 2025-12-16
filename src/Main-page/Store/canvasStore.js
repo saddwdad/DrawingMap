@@ -31,6 +31,8 @@ export const useCanvasStore = defineStore('canvas', {
     // 渲染相关状态
     renderer: null,
     currentTool: 'select',
+    eraserMode: 'object',
+    eraserSize: 20,
     currentColor: '#ffffff', // 初始颜色设置为白色
     currentSize: 100,
     currentBorderWidth: 2,
@@ -326,6 +328,11 @@ export const useCanvasStore = defineStore('canvas', {
       }
       this.pendingItem = null
       this.pendingType = null
+      if (tool !== 'eraser') this.renderer.setObjectsInteractive(true);
+    },
+
+    setEraserMode(mode) {
+      this.eraserMode = mode;
     },
 
     // 设置当前颜色

@@ -9,6 +9,8 @@ export class Renderer {
   
   constructor(stage, app) {
     this.stage = stage;
+    this.lastErasePos = null;
+    this.eraseBrush = new PIXI.Graphics();
     this.app = app;
     this.objects = [];
     this.objectMap = [];
@@ -76,6 +78,100 @@ export class Renderer {
     }
   }
 
+prepareErasableSprite(sprite) {
+  // 🌟 使用纹理的原始尺寸 (texture.orig)，不受外部缩放影响
+  const baseW = sprite.texture.width;
+  const baseH = sprite.texture.height;
+
+  const renderTexture = PIXI.RenderTexture.create({
+    width: baseW,
+    height: baseH,
+    resolution: 1, 
+  });
+
+  const tempSprite = new PIXI.Sprite(sprite.texture);
+  tempSprite.anchor.set(0); 
+  tempSprite.position.set(0);
+
+  this.app.renderer.render({
+    container: tempSprite,
+    target: renderTexture,
+    clear: true
+  });
+
+  sprite.texture = renderTexture;
+  sprite.isFineErasable = true;
+  
+  tempSprite.destroy();
+  return sprite;
+}
+
+setObjectsInteractive(enabled) {
+  this.objects.forEach(obj => {
+    // 如果是橡皮擦模式，enabled 传 false
+    obj.eventMode = enabled ? 'static' : 'none'; 
+    // v8 里用 eventMode，老版本用 interactive = true/false
+    // 'none' 会让事件直接穿透，鼠标图标也不会变小手
+  });
+}
+
+fineEraseLine(currentX, currentY, lastX, lastY, radius) {
+  const objects = this.objects.filter(obj => obj.isFineErasable);
+  
+  objects.forEach(obj => {
+    // 🌟 1. 彻底无视 getGlobalPosition！
+    // 直接用 obj 本身的 x, y。在 Pixi 中，如果图片在 Viewport 里，
+    // obj.x 和 obj.y 就是它相对于父容器（画布）的世界坐标。
+    const worldX = obj.x;
+    const worldY = obj.y;
+
+    // 🌟 2. 获取真正的原始纹理尺寸（不受缩放影响的像素宽高）
+    const texW = obj.texture.width;
+    const texH = obj.texture.height;
+
+    // 🌟 3. 计算相对位移
+    // (鼠标当前世界点 - 图片中心点) / 图片自身缩放
+    const lx = (lastX - worldX) / obj.scale.x;
+    const ly = (lastY - worldY) / obj.scale.y;
+    const cx = (currentX - worldX) / obj.scale.x;
+    const cy = (currentY - worldY) / obj.scale.y;
+
+    // 🌟 4. 坐标系归位
+    // 因为纹理渲染是从左上角(0,0)开始的，
+    // 而图片通常是中心对齐(anchor 0.5)，所以要加回一半的原始像素
+    const ox = texW / 2;
+    const oy = texH / 2;
+
+    this.eraseBrush.clear();
+    
+    // 必须先设为 normal 画出路径，白色代表“要擦除的区域”
+    this.eraseBrush.blendMode = 'normal';
+    this.eraseBrush
+      .moveTo(lx + ox, ly + oy)
+      .lineTo(cx + ox, cy + oy)
+      .stroke({
+        // 核心：半径也要除以缩放，否则你放大画布擦，笔触会变得巨大
+        width: (radius * 2) / Math.abs(obj.scale.x),
+        color: 0x1a1a1a,
+        alpha: 1,
+        cap: 'round',
+        join: 'round'
+      });
+
+    // 🌟 5. 关键：v8 的擦除模式必须这么写
+    this.eraseBrush.blendMode = 'erase';
+
+    // 执行渲染：只往这一个图片的纹理里画
+    this.app.renderer.render({
+      container: this.eraseBrush,
+      target: obj.texture,
+      clear: false,
+    });
+
+    // 状态复位
+    this.eraseBrush.blendMode = 'normal';
+  });
+}
 
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {
@@ -116,6 +212,7 @@ export class Renderer {
               } catch { }
           }
           sprite.anchor.set(0.5)
+          this.prepareErasableSprite(sprite)
           const result = this.addToStage(sprite, x, y)
           resolve(result)
         } catch (error) {
@@ -611,7 +708,6 @@ export class Renderer {
       if (display.needsRenderFix === undefined) {
         display.needsRenderFix = false; 
       }
-
       if(canvasStore){
         canvasStore.notifyObjectsChange(); // 通知外部 UI
       }

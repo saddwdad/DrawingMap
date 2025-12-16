@@ -17,6 +17,7 @@
           @click = "saveToIndexDB()"
           >保存</a-button>
           <shareButton/>
+          <AiImage/>
         </div>
       </div>
     </a-layout-header>
@@ -49,7 +50,25 @@
            @contextmenu.prevent = "handleCanvasContextMenu"
            :style="{cursor: getCursorStyle()}">
         <!-- 画布内容（可缩放、可拖动，样式由pixi管理） -->
+        <div :class="{ 'eraser-active': canvasStore.currentTool === 'eraser' && canvasStore.eraserMode === 'fine' }">
+        <div 
+          v-if="canvasStore.currentTool === 'eraser' && canvasStore.eraserMode === 'fine'"
+          :style="{
+            position: 'fixed',
+            left: mouseX + 'px',
+            top: mouseY + 'px',
+            width: canvasStore.eraserSize * 2 * canvasStore.viewport.scale + 'px',
+            height: canvasStore.eraserSize * 2 * canvasStore.viewport.scale + 'px',
+            border: '1px solid #fff',
+            borderRadius: '50%',
+            pointerEvents: 'none',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 9999,
+            mixBlendMode: 'difference'
+          }"
+        ></div>
         <canvas id="pixi-mount" ref="pixiMountRef" class="pixi-canvas"></canvas>
+        </div>
         <!-- 隐藏的文件输入框，用于图片上传 -->
         <input 
           type="file" 
@@ -89,6 +108,7 @@ import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
 import paramctl from '@/Param-Controller/paramctl.vue'
 import floatingParamctl from '@/Param-Controller/floating-paramctl.vue'
+import AiImage from '@/AIImage/AiImage.vue'
 import * as PIXI from 'pixi.js'
 // 引入AntD图标
 import { SaveOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
@@ -109,7 +129,7 @@ import { useHistoryStore } from '@/History/History'
 //引入分享相关函数
 
 import { triggerFileDownload } from '@/shareUtils/share'
-
+const lastErasePos = ref(null);
 const canvasContainerRef = ref(null)
 const pixiMountRef = ref(null)
 const toolbarRef = ref(null)
@@ -332,11 +352,12 @@ const handleCanvasClick = (event) => {
 }
 
 // 处理鼠标按下事件 - 区分左键和右键
-const handleMouseDown = (e) => {
-  // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
-  if (canvasStore.currentTool === 'select' && e.button === 0) {
-    console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
-    return;
+  const handleMouseDown = (e) => {
+    
+    // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
+    if (canvasStore.currentTool === 'select' && e.button === 0) {
+      console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
+      return;
   }
   
   // 中键按下（按钮值为1）时，开始拖动画布
@@ -356,7 +377,12 @@ const handleMouseDown = (e) => {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
-    canvasStore.eraseAt(x, y)
+    if (canvasStore.eraserMode === 'fine') {
+        lastErasePos.value = { x, y };
+        canvasStore.renderer.fineEraseLine(x, y, x, y, canvasStore.eraserSize); 
+    } else {
+        canvasStore.eraseAt(x, y);
+    }
   }
 }
 
@@ -375,15 +401,7 @@ const handleMouseDown = (e) => {
     dragViewport(e);
     return;
   }
-  // 拖拽中持续擦除：将屏幕坐标转换为世界坐标并调用擦除
-  if (isErasing.value && canvasStore.currentTool === 'eraser') {
-    const rect = pixiMountRef.value.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
-    canvasStore.eraseAt(x, y)
-    return;
-  }
+
   if (canvasStore.pendingType === 'picture' && canvasStore.pendingImageUrl) {
     const rect = pixiMountRef.value.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -394,6 +412,33 @@ const handleMouseDown = (e) => {
     }
   }
     }, 0.1);
+      // 拖拽中持续擦除：将屏幕坐标转换为世界坐标并调用擦除
+  if (isErasing.value && canvasStore.currentTool === 'eraser') {
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
+    if (canvasStore.eraserMode === 'fine') {
+      
+      // 如果有上一个点，就进行“连线擦除”
+      if (lastErasePos.value) {
+        console.log('练笔橡皮擦')
+        canvasStore.renderer.fineEraseLine(
+          x, y,                         // 当前点
+          lastErasePos.value.x,         // 上一个点
+          lastErasePos.value.y, 
+          canvasStore.eraserSize                          // 橡皮擦半径
+        );
+      }
+
+      lastErasePos.value = { x, y };
+      
+    } else {
+      // 这里的 else 就是你原先的“全部删除”逻辑
+      canvasStore.eraseAt(x, y);
+    }
+    return;
+  }
   }
 
 // 处理鼠标释放事件
@@ -407,6 +452,7 @@ const handleMouseUp = (e) => {
   endDrag(e);
   // 结束擦除
   isErasing.value = false
+  lastErasePos.value = null
 }
 
 // 处理鼠标离开事件
@@ -766,7 +812,14 @@ function handleCanvasContextMenu(e){
 </script>
 
 <style scoped>
+.eraser-active {
+  cursor: none !important;
+}
 
+
+.eraser-active canvas {
+  cursor: none !important;
+}
 .floating-minimap {
   position: absolute;
   top: 20px;
