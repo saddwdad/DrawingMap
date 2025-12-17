@@ -41,7 +41,9 @@ const objects = computed(() => {
     renderer.value.objects = []; // 自动修复为数组
     return [];
   }
-  return renderer.value.objects;
+  const brushList = store.objects || [];
+  const rendererList = renderer.value.objects
+  return rendererList
 });
 const hasContent = computed(() => objects.value.length > 0);
 
@@ -78,29 +80,81 @@ const worldToMinimap = (worldX, worldY) => {
  * 修复：绘制单个对象（重点优化大小区分）
  */
 const drawObject = (obj, ctx) => {
-  if (!obj || !obj.x || !obj.y) return;
+  // 基础校验
+  console.log('type属性:', obj.type);
+  if (!obj || obj.x === undefined || obj.y === undefined) return;
 
-  const { x: mmX, y: mmY, objScale } = worldToMinimap(obj.x, obj.y); // 使用独立的objScale
+  // 1. 获取基础位置信息（函数顶层只声明一次）
+  const mmPos = worldToMinimap(obj.x, obj.y);
+  const mmX = mmPos.x;
+  const mmY = mmPos.y;
+  const mmScale = mmPos.scale; // 这是世界缩放比例
+  const mmObjScale = mmPos.objScale; // 这是你定义的 0.05 独立缩放
+
   const shape = obj._shape || {};
   const style = obj._style || {};
 
-  // 颜色保持不变
+  // 颜色逻辑
   const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
   const fillColor = style.background || colors[objects.value.indexOf(obj) % colors.length];
   ctx.fillStyle = fillColor;
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1;
 
-  // 关键：使用独立的objScale，直接映射主画布尺寸，不依赖世界边界缩放
   let drawSize, drawWidth, drawHeight, radius;
+  let targetType = obj.type || shape.type;
+  if (obj.isBrushLine) {
+    targetType = 'line';
+  }
 
+  // 如果还是没有，再看构造函数
+  if (!targetType) {
+      targetType = obj.constructor?.name;
+  }
+  // 2. 根据对象类型绘制
+  switch (targetType) {
+    case 'line': {
+      // 1. 强制更新几何体（v8 关键：防止 bounds 没计算）
+      // obj.geometry?.update(); // 如果报错可以注释掉，通常 v8 会自动处理
 
-  switch (shape.type || obj.constructor?.name) {
+      // 2. 颜色提取
+      const strokeColor = obj._stroke?.color || '#3b82f6';
+      ctx.strokeStyle = strokeColor;
+      ctx.fillStyle = strokeColor;
+
+      // 3. 获取边界数据
+      const b = obj.getBounds();
+      
+      // 🌟 核心修正：主画布上的绝对位置 = 对象位置(mmX, mmY) + 内部偏移(b.x, b.y)
+      // 如果对象没有内部路径，b.width 会是 0
+      if (b.width === 0 || b.height === 0) {
+        // 如果还没生成路径，在对象的 x,y 处画个大圆点，确保能看见
+        ctx.beginPath();
+        ctx.arc(mmX, mmY, 4, 0, Math.PI * 2); 
+        ctx.fill();
+      } else {
+        // 转换到小地图坐标
+        const rectX = mmX + b.x * mmScale;
+        const rectY = mmY + b.y * mmScale;
+        const rectW = Math.max(b.width * mmScale, 5); // 稍微加大点
+        const rectH = Math.max(b.height * mmScale, 5);
+        
+        // 绘制外框
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rectX, rectY, rectW, rectH);
+        
+        // 填充半透明内部，防止线太细看不见
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(rectX, rectY, rectW, rectH);
+        ctx.restore();
+      }
+      console.log('识别到了画线')
+      break;
+    }
     case 'rect':
-      // 直接使用主画布宽度 × 独立缩放比例（不依赖世界边界）
-      drawWidth = (shape.width || 100) * objScale;
-      drawHeight = (shape.height || 100) * objScale;
-      // 放宽尺寸限制（2-60px），让大小差异更明显
+      drawWidth = (shape.width || 100) * mmObjScale;
+      drawHeight = (shape.height || 100) * mmObjScale;
       drawWidth = Math.max(2, Math.min(60, drawWidth));
       drawHeight = Math.max(2, Math.min(60, drawHeight));
       
@@ -111,8 +165,8 @@ const drawObject = (obj, ctx) => {
       break;
 
     case 'circle':
-      radius = (shape.radius || 50) * objScale;
-      radius = Math.max(2, Math.min(30, radius)); // 放宽半径限制
+      radius = (shape.radius || 50) * mmObjScale;
+      radius = Math.max(2, Math.min(30, radius));
       
       ctx.beginPath();
       ctx.arc(mmX, mmY, radius, 0, 2 * Math.PI);
@@ -121,8 +175,8 @@ const drawObject = (obj, ctx) => {
       break;
 
     case 'triangle':
-      drawSize = (shape.size || 100) * objScale;
-      drawSize = Math.max(3, Math.min(60, drawSize)); // 放宽尺寸限制
+      drawSize = (shape.size || 100) * mmObjScale;
+      drawSize = Math.max(3, Math.min(60, drawSize));
       
       ctx.beginPath();
       ctx.moveTo(mmX, mmY - drawSize/2);
@@ -134,37 +188,29 @@ const drawObject = (obj, ctx) => {
       break;
 
     case 'text':
-      // 文本大小也根据字体大小调整
       const fontSize = shape.fontSize || 24;
-      drawSize = fontSize * objScale * 0.8; // 文本尺寸关联字体大小
+      drawSize = fontSize * mmObjScale * 0.8;
       drawSize = Math.max(2, Math.min(10, drawSize));
       
       ctx.beginPath();
       ctx.rect(mmX - drawSize*1.5, mmY - drawSize/2, drawSize*3, drawSize);
       ctx.fill();
       ctx.stroke();
-      ctx.clearRect(mmX + drawSize, mmY - drawSize/2, drawSize/2, drawSize/2);
       break;
 
     case 'Sprite':
-      // 图片大小关联纹理尺寸
       const textureWidth = obj.texture?.width || 100;
-      drawSize = textureWidth * objScale * 0.5;
+      drawSize = textureWidth * mmObjScale * 0.5;
       drawSize = Math.max(4, Math.min(40, drawSize));
       
       ctx.beginPath();
       ctx.rect(mmX - drawSize/2, mmY - drawSize/2, drawSize, drawSize);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(mmX, mmY, 2, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.fillStyle = fillColor;
       break;
 
     default:
-      drawSize = (shape.size || 50) * objScale;
+      drawSize = (shape.size || 50) * mmObjScale;
       drawSize = Math.max(2, Math.min(20, drawSize));
       
       ctx.beginPath();
@@ -179,6 +225,7 @@ const drawObject = (obj, ctx) => {
  * 绘制视口框
  */
 const drawViewport = (ctx) => {
+  
   const world = bounds.value;
   const canvas = minimapCanvas.value;
   if (!world || !canvas) return;
@@ -242,6 +289,7 @@ const drawMinimap = () => {
     objects.value.forEach(obj => {
       try {
         drawObject(obj, ctx);
+        console.log("小地图检测到对象数量:", store.objects.length);
       } catch (e) {
         console.warn('绘制对象失败:', e);
       }

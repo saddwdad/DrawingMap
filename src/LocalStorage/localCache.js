@@ -1,6 +1,6 @@
 // src/utils/localCache.js
 import localForage from 'localforage';
-
+import { useCanvasStore } from '@/Main-page/Store/canvasStore';
 
 const ArrayOfObject = (arr) => Array.isArray(arr) && arr.every(item => typeof item === 'object' && item !== null);
 // 初始化 IndexedDB 存储实例
@@ -94,10 +94,36 @@ export const CanvasCache = {
    */
 
   serialize(data) {
-    if(data && data.objects){
-      data.objects = serializePixiObjects(data.objects)
+    const store = useCanvasStore();
+    const result = { ...data };
+
+    // 1. 处理常规物体
+    if (result.objects) {
+      result.objects = serializePixiObjects(result.objects);
     }
-    return data
+
+    // 只要 renderer 里的那个 Canvas 存在，我们就直接提取
+    if (store.renderer && store.renderer.globalDrawingCtx) {
+      const canvas = store.renderer.globalDrawingCtx.canvas;
+      result.globalDrawingData = canvas.toDataURL('image/png');
+      console.log('📦 全局涂鸦层已直接在 Cache 层提取完毕');
+    }
+
+    return result;
+  },
+
+  _drawBase64ToCanvas(base64, renderer) {
+    const img = new Image();
+    img.onload = () => {
+      const ctx = renderer.globalDrawingCtx;
+      if (ctx) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.drawImage(img, 0, 0);
+        // 别忘了通知 Pixi 纹理更新了，不然画面不闪现
+        renderer.globalDrawingSprite.texture.source.update();
+      }
+    };
+    img.src = base64;
   },
 
   async deserializeObjects(serializedObjects, reconstructor) {
@@ -147,6 +173,9 @@ export const CanvasCache = {
         return null;
       }
       const rawData = cached.data
+      if (rawData.globalDrawingData && storeInstance.renderer) {
+        this._drawBase64ToCanvas(rawData.globalDrawingData, storeInstance.renderer);
+      }
       if (rawData && rawData.objects && Array.isArray(rawData.objects) && storeInstance && storeInstance.reconstructItem) {
           
           // 获取 canvasStore 中用于安全重建的 action

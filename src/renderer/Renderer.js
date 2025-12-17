@@ -78,56 +78,152 @@ export class Renderer {
     }
   }
 
-prepareErasableSprite(sprite) {
-  const oldUrl = sprite.imageUrl;
-  // 🌟 使用纹理的原始尺寸 (texture.orig)，不受外部缩放影响
-  const baseW = sprite.texture.width;
-  const baseH = sprite.texture.height;
+// prepareErasableSprite(sprite) {
+//   const oldUrl = sprite.imageUrl;
+//   // 🌟 使用纹理的原始尺寸 (texture.orig)，不受外部缩放影响
+//   const baseW = sprite.texture.width;
+//   const baseH = sprite.texture.height;
 
-  const renderTexture = PIXI.RenderTexture.create({
-    width: baseW,
-    height: baseH,
-    resolution: 1, 
-  });
+//   const renderTexture = PIXI.RenderTexture.create({
+//     width: baseW,
+//     height: baseH,
+//     resolution: 1,
+//     antialias: false, 
+//   });
 
-  const tempSprite = new PIXI.Sprite(sprite.texture);
-  tempSprite.anchor.set(0); 
-  tempSprite.position.set(0);
+//   const tempSprite = new PIXI.Sprite(sprite.texture);
+//   tempSprite.anchor.set(0); 
+//   tempSprite.position.set(0);
 
-  this.app.renderer.render({
-    container: tempSprite,
-    target: renderTexture,
-    clear: true
-  });
+//   this.app.renderer.render({
+//     container: tempSprite,
+//     target: renderTexture,
+//     clear: true
+//   });
 
-  sprite.texture = renderTexture;
-  sprite.imageUrl = oldUrl;
-  sprite.isFineErasable = true;
-  sprite.type = 'picture';
+//   sprite.texture = renderTexture;
+//   sprite.imageUrl = oldUrl;
+//   sprite.isFineErasable = true;
+//   sprite.type = 'picture';
   
-  tempSprite.destroy();
+//   tempSprite.destroy();
+//   return sprite;
+// }
+prepareErasableSprite(sprite) {
+  const { width: w, height: h } = sprite.texture;
+
+  // 1. 创建一个隐藏的离屏 Canvas
+  const offscreenCanvas = document.createElement('canvas');
+  offscreenCanvas.width = w;
+  offscreenCanvas.height = h;
+  const ctx = offscreenCanvas.getContext('2d');
+
+  // 2. 将原图画到 Canvas 上
+  const sourceImage = sprite.texture.source.resource; // 获取原始图片资源
+  ctx.drawImage(sourceImage, 0, 0);
+
+  // 3. 把这个 Canvas 当做 Sprite 的新纹理
+  const newTexture = PIXI.Texture.from(offscreenCanvas);
+  sprite.texture = newTexture;
+  
+  // 4. 把上下文存起来供擦除使用
+  sprite.eraseCtx = ctx;
+  sprite.offscreenCanvas = offscreenCanvas;
+  sprite.isFineErasable = true;
+
   return sprite;
 }
 
-async finalizeErase(sprite) {
-  if (!sprite || !sprite.isFineErasable) return;
+// async finalizeErase(sprite) {
+//   if (!sprite || !sprite.isFineErasable) return;
 
-  // 🌟 1. 将当前的渲染纹理导出为 Base64 字符串
-  // 注意：v8 的写法可能是 this.app.renderer.extract.base64(sprite.texture)
-  const base64 = await this.app.renderer.extract.base64(sprite.texture);
+//   // 🌟 1. 将当前的渲染纹理导出为 Base64 字符串
+//   // 注意：v8 的写法可能是 this.app.renderer.extract.base64(sprite.texture)
+//   const base64 = await this.app.renderer.extract.base64(sprite.texture);
 
-  // 🌟 2. 更新属性：现在它不再需要 rawSvg 了，因为它已经变成了一张带透明度的位图
-  sprite.imageUrl = base64;
-  sprite.isAiGenerated = false; // 变成普通图片处理，防止重构时又去读 SVG
-  sprite.rawSvg = null; 
-  sprite.isFineErasable = true
+//   // 🌟 2. 更新属性：现在它不再需要 rawSvg 了，因为它已经变成了一张带透明度的位图
+//   sprite.imageUrl = base64;
+//   sprite.isAiGenerated = false; // 变成普通图片处理，防止重构时又去读 SVG
+//   sprite.rawSvg = null; 
+//   sprite.isFineErasable = true
   
-  // 🌟 3. (可选) 如果你希望下次加载还能继续擦，保持 isFineErasable 为 true
-  // 但注意：下次加载时 renderImage 拿到的是 base64，需要重新 prepareErasableSprite
-  console.log('✅ 擦除痕迹已固化为 Base64');
+//   // 🌟 3. (可选) 如果你希望下次加载还能继续擦，保持 isFineErasable 为 true
+//   // 但注意：下次加载时 renderImage 拿到的是 base64，需要重新 prepareErasableSprite
+//   console.log('✅ 擦除痕迹已固化为 Base64');
+//   return base64;
+// }
+async finalizeErase(sprite) {
+  // 🌟 核心修正：判断依据增加 eraseCtx
+  if (!sprite || !sprite.isFineErasable || !sprite.eraseCtx) return;
+
+  // 🌟 直接从 Canvas 实例获取 Base64，不走 WebGL 提取
+  // 这一步是把 Canvas 上的像素物理固化成字符串
+  const base64 = sprite.eraseCtx.canvas.toDataURL('image/png');
+
+  // 更新属性
+  sprite.imageUrl = base64;
+  sprite.isAiGenerated = false; 
+  sprite.rawSvg = null; 
+  sprite.isFineErasable = true;
+  
+  // 💡 重要：固化后，我们要更新一下纹理，确保下次加载前显示也是对的
+  // 这一步可选，因为 Canvas 已经更新过了
+  
+  console.log('✅ 像素级数据已从 Canvas 成功固化');
   return base64;
 }
+initGlobalDrawingLayer() {
+  const w = this.app.screen.width;
+  const h = this.app.screen.height;
 
+  // 1. 创建全屏离屏 Canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  // 2. 创建 Pixi 纹理和 Sprite
+  const texture = PIXI.Texture.from(canvas);
+  const drawingSprite = new PIXI.Sprite(texture);
+  
+  // 3. 让他不挡住下面物体的点击事件，但我们要他在最顶层
+  drawingSprite.eventMode = 'none'; 
+  drawingSprite.zIndex = 9999; // 确保在最前面
+
+  this.stage.addChild(drawingSprite);
+
+  // 保存引用
+  this.globalDrawingCtx = ctx;
+  this.globalDrawingSprite = drawingSprite;
+}
+drawOnEverything(currentX, currentY, lastX, lastY, radius, color = '#ff0000') {
+  if (!this.globalDrawingCtx) return;
+
+  const ctx = this.globalDrawingCtx;
+
+  // 🌟 核心：直接使用相对于舞台的坐标
+  // 注意：如果你的舞台有缩放(Viewport)，需要转换一下
+  const lx = (lastX - this.stage.x) / this.stage.scale.x + this.stage.pivot.x;
+  const ly = (lastY - this.stage.y) / this.stage.scale.y + this.stage.pivot.y;
+  const cx = (currentX - this.stage.x) / this.stage.scale.x + this.stage.pivot.x;
+  const cy = (currentY - this.stage.y) / this.stage.scale.y + this.stage.pivot.y;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(cx, cy);
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = radius * 2; // 全局画笔不需要除以图片缩放，看心情给就行
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
+
+  // 刷新纹理
+  this.globalDrawingSprite.texture.source.update();
+}
 setObjectsInteractive(enabled) {
   this.objects.forEach(obj => {
     // 如果是橡皮擦模式，enabled 传 false
@@ -136,64 +232,93 @@ setObjectsInteractive(enabled) {
     // 'none' 会让事件直接穿透，鼠标图标也不会变小手
   });
 }
-
 fineEraseLine(currentX, currentY, lastX, lastY, radius) {
-  const objects = this.objects.filter(obj => obj.isFineErasable);
-  
+  const objects = this.objects.filter(obj => obj.isFineErasable && obj.eraseCtx);
+
   objects.forEach(obj => {
-    // 🌟 1. 彻底无视 getGlobalPosition！
-    // 直接用 obj 本身的 x, y。在 Pixi 中，如果图片在 Viewport 里，
-    // obj.x 和 obj.y 就是它相对于父容器（画布）的世界坐标。
-    const worldX = obj.x;
-    const worldY = obj.y;
-
-    // 🌟 2. 获取真正的原始纹理尺寸（不受缩放影响的像素宽高）
-    const texW = obj.texture.width;
-    const texH = obj.texture.height;
-
-    // 🌟 3. 计算相对位移
-    // (鼠标当前世界点 - 图片中心点) / 图片自身缩放
-    const lx = (lastX - worldX) / obj.scale.x;
-    const ly = (lastY - worldY) / obj.scale.y;
-    const cx = (currentX - worldX) / obj.scale.x;
-    const cy = (currentY - worldY) / obj.scale.y;
-
-    // 🌟 4. 坐标系归位
-    // 因为纹理渲染是从左上角(0,0)开始的，
-    // 而图片通常是中心对齐(anchor 0.5)，所以要加回一半的原始像素
-    const ox = texW / 2;
-    const oy = texH / 2;
-
-    this.eraseBrush.clear();
+    const ctx = obj.eraseCtx;
     
-    // 必须先设为 normal 画出路径，白色代表“要擦除的区域”
-    this.eraseBrush.blendMode = 'normal';
-    this.eraseBrush
-      .moveTo(lx + ox, ly + oy)
-      .lineTo(cx + ox, cy + oy)
-      .stroke({
-        // 核心：半径也要除以缩放，否则你放大画布擦，笔触会变得巨大
-        width: (radius * 2) / Math.abs(obj.scale.x),
-        color: 0x1a1a1a,
-        alpha: 1,
-        cap: 'round',
-        join: 'round'
-      });
+    // 坐标计算 (保持你原来的 ox, oy 偏移逻辑)
+    const lx = (lastX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+    const ly = (lastY - obj.y) / obj.scale.y + (obj.texture.height / 2);
+    const cx = (currentX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+    const cy = (currentY - obj.y) / obj.scale.y + (obj.texture.height / 2);
 
-    // 🌟 5. 关键：v8 的擦除模式必须这么写
-    this.eraseBrush.blendMode = 'erase';
+    // 🌟 核心：使用 Canvas 2D 的原生擦除
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(cx, cy);
+    ctx.lineWidth = (radius * 2) / Math.abs(obj.scale.x);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
 
-    // 执行渲染：只往这一个图片的纹理里画
-    this.app.renderer.render({
-      container: this.eraseBrush,
-      target: obj.texture,
-      clear: false,
-    });
-
-    // 状态复位
-    this.eraseBrush.blendMode = 'normal';
+    // 🌟 关键：通知 Pixi 纹理更新了
+    obj.texture.source.update(); 
   });
 }
+// fineEraseLine(currentX, currentY, lastX, lastY, radius) {
+//   const objects = this.objects.filter(obj => obj.isFineErasable);
+  
+//   objects.forEach(obj => {
+//     // 🌟 1. 彻底无视 getGlobalPosition！
+//     // 直接用 obj 本身的 x, y。在 Pixi 中，如果图片在 Viewport 里，
+//     // obj.x 和 obj.y 就是它相对于父容器（画布）的世界坐标。
+//     const worldX = obj.x;
+//     const worldY = obj.y;
+
+//     // 🌟 2. 获取真正的原始纹理尺寸（不受缩放影响的像素宽高）
+//     const texW = obj.texture.width;
+//     const texH = obj.texture.height;
+
+//     // 🌟 3. 计算相对位移
+//     // (鼠标当前世界点 - 图片中心点) / 图片自身缩放
+//     const lx = (lastX - worldX) / obj.scale.x;
+//     const ly = (lastY - worldY) / obj.scale.y;
+//     const cx = (currentX - worldX) / obj.scale.x;
+//     const cy = (currentY - worldY) / obj.scale.y;
+
+//     // 🌟 4. 坐标系归位
+//     // 因为纹理渲染是从左上角(0,0)开始的，
+//     // 而图片通常是中心对齐(anchor 0.5)，所以要加回一半的原始像素
+//     const ox = texW / 2;
+//     const oy = texH / 2;
+
+//     this.eraseBrush.clear();
+
+
+//     this.eraseBrush.blendMode = 'normal';
+//     // 必须先设为 normal 画出路径，背景色代表“要擦除的区域”
+//     this.eraseBrush
+//       .moveTo(lx + ox, ly + oy)
+//       .lineTo(cx + ox, cy + oy)
+//       .stroke({
+//         // 核心：半径也要除以缩放，否则你放大画布擦，笔触会变得巨大
+//         width: (radius * 2) / Math.abs(obj.scale.x),
+//         color: 0x1a1a1a,
+//         alpha: 1,
+//         cap: 'round',
+//         join: 'round'
+//       });
+
+
+//     const wrap = new PIXI.Container();
+//     wrap.addChild(this.eraseBrush);
+//     wrap.blendMode = 'erase';
+//     // 执行渲染：只往这一个图片的纹理里画
+//     this.app.renderer.render({
+//       container: wrap,
+//       target: obj.texture,
+//       clear: false,
+//     });
+//     wrap.removeChild(this.eraseBrush);
+//     // 状态复位
+//     // this.eraseBrush.blendMode = 'normal';
+//   });
+// }
 
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {

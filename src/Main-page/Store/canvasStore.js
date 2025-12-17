@@ -15,11 +15,14 @@ export const useCanvasStore = defineStore('canvas', {
     isDragging: false, // 是否正在拖动内容
     dragStart: { x: 0, y: 0 },
     dragRafId: null,
+    currentTool: 'select',
+    brushSize: 5,
+    brushColor: '#ff0000',
     lastDragDelta: { dx: 0, dy: 0 },
     dragRafId: null,
     lastDragDelta: { dx: 0, dy: 0 },
     bgColor: '#1a1a1a', // 内容背景色
-    borderColor: '#333', // 内容边框色
+    borderColor: '#333333', // 内容边框色
     scalestep: 0.1,
     scaleLimits: { min: 0.1, max: 10 },
     scaleLimits: { min: 0.1, max: 10 },
@@ -700,6 +703,7 @@ export const useCanvasStore = defineStore('canvas', {
 
         // 如果没有 URL 也没有 SVG，那就真没救了
         if (!finalUrl) return null;
+
         newItem = await this.renderer.renderImage(
           data.x,
           data.y,
@@ -712,6 +716,10 @@ export const useCanvasStore = defineStore('canvas', {
             isLoad: true
           }
         )
+        if (data.isFineErasable) {
+        // 这步会把 base64 画进一个新的 Canvas，并生成新的 eraseCtx
+        this.prepareErasableSprite(data);
+        }
         if(newItem){
           newItem.id =  data.id
           newItem.type = data.type

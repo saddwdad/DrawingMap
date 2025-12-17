@@ -2,50 +2,59 @@
   <a-card title="画布工具" class="toolbar-card" bordered>
     <a-space warp:size="10" class="tool-space">
       <template v-for="tool in toolList" :key="tool.type">
-        
-      <a-popover v-if="tool.type === 'eraser'" trigger="click" placement="right" >
-        <template #content>
-          <a-space direction="vertical" style="width: 180px; padding: 10px 5px;">
-            <a-button 
-              block 
-              :type="canvasStore.eraserMode === 'fine' ? 'primary' : 'text'" 
-              @click="selectEraserMode('fine')"
-            >
-              ✨ 精细化擦除
-            </a-button>
-            <a-button 
-              block 
-              :type="canvasStore.eraserMode === 'object' ? 'text' : 'primary'" 
-              @click="selectEraserMode('object')"
-            >
-              🗑️ 整体删除
-            </a-button>
-
-            <div v-if="canvasStore.eraserMode === 'fine'" style="margin-top: 10px;" cursor:none>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <span style="font-size: 12px; color: #666;">擦除半径:</span>
-                <span style="font-weight: bold; color: #1890ff;">{{ canvasStore.eraserSize }}px</span>
+        <a-popover v-if="tool.type === 'brush'" trigger="click" placement="right">
+          <template #content>
+            <a-space direction="vertical" style="width: 200px; padding: 10px 5px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                  <span style="font-size: 12px; color: #666;">画笔粗细:</span>
+                  <span style="font-weight: bold; color: #1890ff;">{{ canvasStore.brushSize || 5 }}px</span>
+                </div>
+                <a-slider v-model:value="canvasStore.brushSize" :min="1" :max="50" />
               </div>
-              <a-slider 
-                v-model:value="canvasStore.eraserSize" 
-                :min="1" 
-                :max="100" 
-                @change="canvasStore.setEraserSize"
-              />
-            </div>
-          </a-space>
-        </template>
-        
-        <a-button
-          class="tool-btn"
-          :type="'eraser' === currentTool ? 'primary' : 'default'"
-          :icon="createVNode(tool.icon, {class: 'uniformIcon'})"
-          block
-          shape="round"
-        >
-          {{ tool.name }}
-        </a-button>
-      </a-popover>
+              <div>
+                <span style="font-size: 12px; color: #666; display: block; margin-bottom: 5px;">画笔颜色:</span>
+                <input type="color" v-model="canvasStore.brushColor" style="width: 100%; height: 30px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px;" />
+              </div>
+            </a-space>
+          </template>
+          <a-button
+            class="tool-btn"
+            :type="'brush' === currentTool ? 'primary' : 'default'"
+            :icon="createVNode(tool.icon, {class: 'uniformIcon'})"
+            block
+            shape="round"
+            @click="handleToolClick('brush', $event)"
+          >
+            {{ tool.name }}
+          </a-button>
+        </a-popover>
+
+        <a-popover v-else-if="tool.type === 'eraser'" trigger="click" placement="right" >
+          <template #content>
+            <a-space direction="vertical" style="width: 180px; padding: 10px 5px;">
+              <a-button block :type="canvasStore.eraserMode === 'fine' ? 'primary' : 'text'" @click="selectEraserMode('fine')">✨ 精细化擦除</a-button>
+              <a-button block :type="canvasStore.eraserMode === 'object' ? 'text' : 'primary'" @click="selectEraserMode('object')">🗑️ 整体删除</a-button>
+              <div v-if="canvasStore.eraserMode === 'fine'" style="margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                  <span style="font-size: 12px; color: #666;">擦除半径:</span>
+                  <span style="font-weight: bold; color: #1890ff;">{{ canvasStore.eraserSize }}px</span>
+                </div>
+                <a-slider v-model:value="canvasStore.eraserSize" :min="1" :max="100" @change="canvasStore.setEraserSize" />
+              </div>
+            </a-space>
+          </template>
+          <a-button
+            class="tool-btn"
+            :type="'eraser' === currentTool ? 'primary' : 'default'"
+            :icon="createVNode(tool.icon, {class: 'uniformIcon'})"
+            block
+            shape="round"
+            @click="handleToolClick('eraser', $event)"
+          >
+            {{ tool.name }}
+          </a-button>
+        </a-popover>
 
         <a-button
           v-else
@@ -66,7 +75,7 @@
 <script setup>
 
 import { ref, createVNode, h, computed } from 'vue' 
-import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined} from '@ant-design/icons-vue'
+import {EditOutlined, DeleteOutlined, ReloadOutlined, PictureOutlined, SelectOutlined, FileTextOutlined} from '@ant-design/icons-vue'
 import circle from '@/icons/circle.vue'
 import square from '@/icons/square.vue'
 import triangle from '@/icons/triangle.vue'
@@ -92,7 +101,8 @@ const FaEraser = () => {
 const toolList = [
   // 新增：选择工具，用于点击对象进入编辑
   { type: 'select', name: '选择', icon: SelectOutlined },
-  { type: 'pen', name: '文本', icon: EditOutlined },
+  { type: 'brush', name: '画笔', icon: EditOutlined },
+  { type: 'pen', name: '文本', icon: FileTextOutlined },
   { type: 'rect', name: '矩形', icon: square },
   { type: 'circle', name: '圆形', icon: circle },
   { type: 'triangle', name: '三角形', icon: triangle},
@@ -113,7 +123,17 @@ const handleToolClick = (toolType, e) => {
   console.log('当前工具已设置:', canvasStore.currentTool);
   
   // 处理特殊工具
-  if (toolType === 'clear') {
+  if (toolType === 'brush') {
+    // 1. 开启画笔模式时，通常也要关闭物体的交互，防止画画时误点选中物体
+    canvasStore.renderer.setObjectsInteractive(false);
+    
+    // 2. 确保全局图层已初始化
+    if (!canvasStore.renderer.globalDrawingCtx) {
+        canvasStore.renderer.initGlobalDrawingLayer();
+    }
+    
+    import('ant-design-vue').then(({ message }) => message.info('已开启自由绘画模式'));
+  } else if (toolType === 'clear') {
     canvasStore.clearCanvas()
   } else if (toolType === 'reset') {
     canvasStore.resetCanvas()

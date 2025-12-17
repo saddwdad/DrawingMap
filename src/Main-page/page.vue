@@ -99,10 +99,10 @@
 
 <script setup>
 
-import { defineComponent, h, createVNode, computed, watch, ref, onMounted, onUnmounted, nextTick} from 'vue'
+import { defineComponent, h, createVNode, computed, watch, ref, onMounted, onUnmounted, nextTick, markRaw} from 'vue'
 import { storeToRefs } from 'pinia'
 import { FontAwesomeIcon  } from '@fortawesome/vue-fontawesome'
-import { faPalette } from '@fortawesome/free-solid-svg-icons'
+import { faL, faPalette } from '@fortawesome/free-solid-svg-icons'
 // 引入子组件
 import minimap from './minimap/minimap.vue'
 import toolbar from '@/Toolbar/toolbar.vue'
@@ -130,7 +130,10 @@ import { useHistoryStore } from '@/History/History'
 
 import { triggerFileDownload } from '@/shareUtils/share'
 const lastErasePos = ref(null);
+const lastBrushPos = ref(null);
 const canvasContainerRef = ref(null)
+const activeLine = ref(null)
+const isPainting = ref(false)
 const pixiMountRef = ref(null)
 const toolbarRef = ref(null)
 const floatingParamRef = ref(null)
@@ -201,15 +204,19 @@ const initPixi = async () => {
   // 1. 创建 Pixi 应用
   canvasStore.initViewportSize(width,height)
   app = new PIXI.Application();
-
+  
   await app.init(
     {
     width: width,
     height: height,
+    backgroundAlpha: 1,
     backgroundColor: 0x1a1a1a, // 对应 Store 的 bgColor
     canvas: pixiMountRef.value,
     resolution: window.devicePixelRatio || 1,
-    autoDensity: true
+    autoDensity: true,
+    antialias: false,
+    premultipliedAlpha: true, 
+    preferWorkers: true
   }
 )
     
@@ -268,7 +275,7 @@ const initPixi = async () => {
   // 初始化画布事件监听器（用于框选功能），传入app.stage作为参数
   
   canvasStore.setRenderer(renderer);
-
+  canvasStore.renderer.initGlobalDrawingLayer()
   await nextTick()
   if (minimapRef.value) {
     // 修复：你的minimap.vue已经通过useCanvasStore获取了所有需要的状态，不需要传入renderer和scale
@@ -353,7 +360,30 @@ const handleCanvasClick = (event) => {
 
 // 处理鼠标按下事件 - 区分左键和右键
   const handleMouseDown = (e) => {
-    
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mX = e.clientX - rect.left;
+    const mY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mX, mY);
+    if(canvasStore.currentTool === 'brush' && e.button === 0){
+      isPainting.value = true
+      lastBrushPos.value = { x, y };
+      // 🌟 关键：新建这一笔的 Graphics 对象
+        const currentLine = new PIXI.Graphics();
+        currentLine.x = x; 
+        currentLine.y = y;
+        // 设置样式：从 store 拿粗细和颜色
+        currentLine.setStrokeStyle({
+        width: canvasStore.brushSize,
+        color: canvasStore.brushColor,
+        cap: 'round', // 让线条圆润点，别断断续续的
+        join: 'round'
+        });
+        currentLine.moveTo(0, 0);
+        
+        // 把这个对象存起来，mousemove 的时候用
+        activeLine.value = currentLine; 
+        stage.addChild(currentLine);
+    }
     // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
     if (canvasStore.currentTool === 'select' && e.button === 0) {
       console.log('选择工具激活，跳过DOM mousedown处理，让Pixi框选功能执行');
@@ -412,7 +442,17 @@ const handleCanvasClick = (event) => {
     }
   }
     }, 0.1);
-      // 拖拽中持续擦除：将屏幕坐标转换为世界坐标并调用擦除
+
+  if (isPainting.value && canvasStore.currentTool === 'brush') {
+    const rect = pixiMountRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const { x, y } = canvasStore.screenToWorld(mouseX, mouseY)
+    activeLine.value.lineTo(x - activeLine.value.x, y - activeLine.value.y).stroke();
+
+    return; // 画画时不再执行后续逻辑
+  }
+  // 拖拽中持续擦除：将屏幕坐标转换为世界坐标并调用擦除
   if (isErasing.value && canvasStore.currentTool === 'eraser') {
     const rect = pixiMountRef.value.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -447,6 +487,19 @@ const handleMouseUp = async (e) => {
   if (canvasStore.currentTool === 'select' && e.button === 0) {
     console.log('选择工具激活，跳过DOM mouseup处理，让Pixi框选功能执行');
     return;
+  }
+  if(canvasStore.currentTool === 'brush' && e.button === 0){
+    isPainting.value = false
+    if (activeLine.value) {
+            // 🌟 告诉 store：这一划画完了，存起来
+            activeLine.value.isBrushLine = true;
+            activeLine.value.type = 'line'
+            activeLine.value.isFineErasable = true
+            canvasStore.renderer.objects.push(markRaw(activeLine.value));
+            canvasStore.notifyObjectsChange()
+            activeLine.value = null;
+        }
+    lastBrushPos.value = null;
   }
   if (isErasing.value && canvasStore.currentTool === 'eraser') {
     isErasing.value = false;
@@ -562,50 +615,11 @@ const updatePixiViewport = () => {
   }
 }
 
-// 绘制无限网格（示例：基于坐标系统，无尺寸限制）
 
 
-const drawInfiniteGrid = (container) => {
-  const grid = new PIXI.Graphics()
-  const gridSize = 50 // 网格间距
-  const gridColor = 0xffffff // 网格颜色
-  const maxRange = 10000 // 真正无限（可设为较大值优化性能，如100000）
-
-  const thinLineStyle = {
-    width: 1, 
-    color: gridColor,
-    alpha: 0.5 
-  };
-  grid.setStrokeStyle(thinLineStyle);
-  // 绘制水平线
-  for (let y = -maxRange; y < maxRange; y += gridSize) {
-    grid.moveTo(-maxRange, y)
-    grid.lineTo(maxRange, y)
-  }
-  // 绘制垂直线
-  for (let x = -maxRange; x < maxRange; x += gridSize) {
-    grid.moveTo(x, -maxRange)
-    grid.lineTo(x, maxRange)
-  }
-  grid.stroke();
-  const centerLineStyle = { width: 2, color: 0xbe4a60, alpha: 0.8 };
-  grid.stroke(centerLineStyle); 
-
-  // X 轴
-  grid.moveTo(-maxRange, 0);
-  grid.lineTo(maxRange, 0);
-  
-  // Y 轴
-  grid.moveTo(0, -maxRange);
-  grid.lineTo(0, maxRange);
-
-  grid.stroke();
-
-  container.addChild(grid)
-}
 
 
-// 处理鼠标滚轮缩放事件
+
 // 处理鼠标滚轮缩放事件
 const handleScale = (e) => {
   const delta = e.deltaY > 0 ? -canvasStore.scalestep : canvasStore.scalestep
