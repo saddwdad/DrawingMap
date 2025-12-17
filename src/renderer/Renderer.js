@@ -79,6 +79,7 @@ export class Renderer {
   }
 
 prepareErasableSprite(sprite) {
+  const oldUrl = sprite.imageUrl;
   // 🌟 使用纹理的原始尺寸 (texture.orig)，不受外部缩放影响
   const baseW = sprite.texture.width;
   const baseH = sprite.texture.height;
@@ -100,10 +101,31 @@ prepareErasableSprite(sprite) {
   });
 
   sprite.texture = renderTexture;
+  sprite.imageUrl = oldUrl;
   sprite.isFineErasable = true;
+  sprite.type = 'picture';
   
   tempSprite.destroy();
   return sprite;
+}
+
+async finalizeErase(sprite) {
+  if (!sprite || !sprite.isFineErasable) return;
+
+  // 🌟 1. 将当前的渲染纹理导出为 Base64 字符串
+  // 注意：v8 的写法可能是 this.app.renderer.extract.base64(sprite.texture)
+  const base64 = await this.app.renderer.extract.base64(sprite.texture);
+
+  // 🌟 2. 更新属性：现在它不再需要 rawSvg 了，因为它已经变成了一张带透明度的位图
+  sprite.imageUrl = base64;
+  sprite.isAiGenerated = false; // 变成普通图片处理，防止重构时又去读 SVG
+  sprite.rawSvg = null; 
+  sprite.isFineErasable = true
+  
+  // 🌟 3. (可选) 如果你希望下次加载还能继续擦，保持 isFineErasable 为 true
+  // 但注意：下次加载时 renderImage 拿到的是 base64，需要重新 prepareErasableSprite
+  console.log('✅ 擦除痕迹已固化为 Base64');
+  return base64;
 }
 
 setObjectsInteractive(enabled) {
@@ -176,12 +198,14 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {
     return new Promise((resolve) => {
+      console.log('imageUrl是', imageUrl)
       const img = new Image()
       img.onload = () => {
         try {
           const texture = PIXI.Texture.from(img)
           const sprite = new PIXI.Sprite(texture)
           sprite.imageUrl = imageUrl
+          sprite.type = 'picture'
           sprite.needsRenderFix = true;
           sprite.rawFilters = options.filters || 'none'
           if (options.filters) {

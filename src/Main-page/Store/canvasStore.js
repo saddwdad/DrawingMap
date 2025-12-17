@@ -532,6 +532,7 @@ export const useCanvasStore = defineStore('canvas', {
             // 1. 异步渲染图片并添加到舞台 (等待 Promise 返回)
             const imageItem = await this.renderer.renderImage(x, y, imageUrl, { filters, scale });
             this.forceViewpotUpdate()
+            console.log('imageUrl是',imageUrl)
             if (!imageItem || !imageItem.id) {
                 console.warn('图片对象创建失败或缺少ID，无法记录历史。');
                 return;
@@ -686,10 +687,23 @@ export const useCanvasStore = defineStore('canvas', {
       let newItem = null
 
       if(data.type === 'picture' && data.imageUrl){
+        let finalUrl = data.imageUrl;
+        if (data.isAiGenerated && data.rawSvg) {
+            try {
+                const blob = new Blob([data.rawSvg], { type: 'image/svg+xml;charset=utf-8' });
+                finalUrl = URL.createObjectURL(blob);
+                console.log('✅ AI素材已通过rawSvg重新激活:', finalUrl);
+            } catch (e) {
+                console.error('❌ 尝试恢复AI素材Blob失败:', e);
+            }
+        }
+
+        // 如果没有 URL 也没有 SVG，那就真没救了
+        if (!finalUrl) return null;
         newItem = await this.renderer.renderImage(
           data.x,
           data.y,
-          data.imageUrl,
+          finalUrl,
           {
             filters: data.filters,
             scale: {x: data.scaleX, y: data.scaleY}
@@ -701,6 +715,9 @@ export const useCanvasStore = defineStore('canvas', {
         if(newItem){
           newItem.id =  data.id
           newItem.type = data.type
+          newItem.rawSvg = data.rawSvg;
+          newItem.isAiGenerated = data.isAiGenerated;
+          newItem.imageUrl = finalUrl;
         }
       }
       else if(['rect', 'triangle', 'circle', 'text'].includes(data.type)){

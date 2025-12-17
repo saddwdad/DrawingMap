@@ -44,6 +44,8 @@ const canvasStorage = localForage.createInstance({
                   serialized.imageUrl = obj.imageUrl;
                   // filters 被挂载在对象上
                   serialized.filters = obj.rawFilters || obj.filters || {}; 
+                  serialized.rawSvg = obj.rawSvg
+                  serialized.isAiGenerated = obj.isAiGenerated
 
               } else if (['rect', 'circle', 'triangle'].includes(itemType)) {
                   if(obj._shape){

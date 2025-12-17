@@ -68,6 +68,7 @@ const generateAiAsset = async () => {
     },{
         timeout: 60000
     });
+    const result = response.data.svg_xml;
 
     if (response.data.success) {
       console.log('1. 后端成功返回数据');
@@ -76,13 +77,21 @@ const generateAiAsset = async () => {
       const aiImageUrl = URL.createObjectURL(blob);
       console.log('2. Blob URL已生成:', aiImageUrl);
       console.log('3. 开始准备进入渲染逻辑');
-      await canvasStore.renderer.renderImage(canvasStore.renderer.app.screen.width / 2, canvasStore.renderer.app.screen.height / 2, aiImageUrl, {
+      const sprite =  await canvasStore.renderer.renderImage(canvasStore.renderer.app.screen.width, canvasStore.renderer.app.screen.height, aiImageUrl, {
             scale: 0.5, // 或者是你想要的缩放
             filters: 'none'
       });
+      console.log('AiimageUrl是', aiImageUrl)
       console.log('4. 渲染函数执行完毕');
       message.success('素材已放置在画布中心！');
       userPrompt.value = '';
+      if (sprite) {
+        // 把原始 SVG 塞进对象里！
+        // 以后 IndexDB 恢复时，如果没有 URL，就用这个重新生成一个 Blob
+        sprite.rawSvg = result; 
+        sprite.type = 'picture';
+        sprite.isAiGenerated = true;
+    }
     } else {
       message.error(response.data.msg);
     }

@@ -442,13 +442,25 @@ const handleCanvasClick = (event) => {
   }
 
 // 处理鼠标释放事件
-const handleMouseUp = (e) => {
+const handleMouseUp = async (e) => {
   // 选择工具：跳过DOM事件处理，让Pixi的框选功能正常工作
   if (canvasStore.currentTool === 'select' && e.button === 0) {
     console.log('选择工具激活，跳过DOM mouseup处理，让Pixi框选功能执行');
     return;
   }
-  
+  if (isErasing.value && canvasStore.currentTool === 'eraser') {
+    isErasing.value = false;
+    lastErasePos.value = null;
+
+    // 🌟 找到所有正在被精细擦除的对象
+    const erasableObjects = canvasStore.renderer.objects.filter(obj => obj.isFineErasable);
+    
+    for (const obj of erasableObjects) {
+      // 固化这一秒钟的成果
+      await canvasStore.renderer.finalizeErase(obj);
+    }
+    
+  }
   endDrag(e);
   // 结束擦除
   isErasing.value = false
