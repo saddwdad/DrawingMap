@@ -133,6 +133,58 @@ prepareErasableSprite(sprite) {
 
   return sprite;
 }
+// 专门处理线条和图形等（Graphics）的擦除初始化
+async prepareErasableGraphics(graphics) {
+  const bounds = graphics.getBounds();
+  const renderer = this.app.renderer;
+  const resolution = renderer.resolution; // 获取当前分辨率（如 2）
+  const canvasStore = useCanvasStore()
+  // 1. 提取 Canvas (提取出来的像素已经是逻辑尺寸 * resolution)
+  const offscreenCanvas = renderer.extract.canvas(graphics);
+  const ctx = offscreenCanvas.getContext('2d');
+
+  // 2. 🌟 修复 v8 报错：手动创建 CanvasSource 和 Texture
+  // 这种写法避开了 Texture.from 的自动识别 bug
+  const canvasSource = new PIXI.CanvasSource({
+    resource: offscreenCanvas,
+    resolution: resolution, // 👈 解决“变大一圈”的问题
+  });
+
+  const newTexture = new PIXI.Texture({
+    source: canvasSource,
+  });
+
+  const newSprite = new PIXI.Sprite(newTexture);
+
+  // 3. 锚点和坐标对齐 (中心锚点模式)
+  newSprite.anchor.set(0.5);
+
+  if (graphics.parent) {
+    // 拿到世界中心坐标
+    const worldCenter = {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2
+    };
+    // 🌟 关键：使用 toLocal 转换到父容器坐标，解决“瞬移”到左上角的问题
+    const localPos = graphics.parent.toLocal(worldCenter);
+    newSprite.x = localPos.x;
+    newSprite.y = localPos.y;
+
+    graphics.parent.addChild(newSprite);
+    graphics.parent.removeChild(graphics);
+    canvasStore.forceViewpotUpdate()
+  }
+
+  // 4. 挂载橡皮擦属性
+  newSprite.eraseCtx = ctx;
+  newSprite.offscreenCanvas = offscreenCanvas;
+  newSprite.isFineErasable = true;
+  newSprite.type = 'line';
+
+  // 销毁原有的矢量，释放内存
+  graphics.destroy(); 
+  return newSprite;
+}
 
 // async finalizeErase(sprite) {
 //   if (!sprite || !sprite.isFineErasable) return;
@@ -237,88 +289,67 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
 
   objects.forEach(obj => {
     const ctx = obj.eraseCtx;
+    // 🌟 获取该对象的分辨率（线条是 2，普通图片可能是 1）
+    const res = obj.texture.source.resolution || 1;
     
-    // 坐标计算 (保持你原来的 ox, oy 偏移逻辑)
-    const lx = (lastX - obj.x) / obj.scale.x + (obj.texture.width / 2);
-    const ly = (lastY - obj.y) / obj.scale.y + (obj.texture.height / 2);
-    const cx = (currentX - obj.x) / obj.scale.x + (obj.texture.width / 2);
-    const cy = (currentY - obj.y) / obj.scale.y + (obj.texture.height / 2);
+    // 1. 先计算逻辑空间下的局部坐标 (0 到 texture.width)
+    const localLastX = (lastX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+    const localLastY = (lastY - obj.y) / obj.scale.y + (obj.texture.height / 2);
+    const localCurrX = (currentX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+    const localCurrY = (currentY - obj.y) / obj.scale.y + (obj.texture.height / 2);
 
-    // 🌟 核心：使用 Canvas 2D 的原生擦除
+    // 2. 🌟 转换为物理像素坐标 (乘以 res)
+    const px = localCurrX * res;
+    const py = localCurrY * res;
+    const plx = localLastX * res;
+    const ply = localLastY * res;
+
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
     ctx.beginPath();
-    ctx.moveTo(lx, ly);
-    ctx.lineTo(cx, cy);
-    ctx.lineWidth = (radius * 2) / Math.abs(obj.scale.x);
+    ctx.moveTo(plx, ply);
+    ctx.lineTo(px, py);
+    
+    // 3. 🌟 线宽也要乘以分辨率，否则擦除痕迹会变细
+    ctx.lineWidth = (radius * 2 * res) / Math.abs(obj.scale.x);
+    
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
     ctx.restore();
 
-    // 🌟 关键：通知 Pixi 纹理更新了
     obj.texture.source.update(); 
   });
 }
 // fineEraseLine(currentX, currentY, lastX, lastY, radius) {
-//   const objects = this.objects.filter(obj => obj.isFineErasable);
-  
+//   const objects = this.objects.filter(obj => obj.isFineErasable && obj.eraseCtx);
+
 //   objects.forEach(obj => {
-//     // 🌟 1. 彻底无视 getGlobalPosition！
-//     // 直接用 obj 本身的 x, y。在 Pixi 中，如果图片在 Viewport 里，
-//     // obj.x 和 obj.y 就是它相对于父容器（画布）的世界坐标。
-//     const worldX = obj.x;
-//     const worldY = obj.y;
+//     const ctx = obj.eraseCtx;
+    
+//     // 坐标计算 (保持你原来的 ox, oy 偏移逻辑)
+//     const lx = (lastX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+//     const ly = (lastY - obj.y) / obj.scale.y + (obj.texture.height / 2);
+//     const cx = (currentX - obj.x) / obj.scale.x + (obj.texture.width / 2);
+//     const cy = (currentY - obj.y) / obj.scale.y + (obj.texture.height / 2);
 
-//     // 🌟 2. 获取真正的原始纹理尺寸（不受缩放影响的像素宽高）
-//     const texW = obj.texture.width;
-//     const texH = obj.texture.height;
+//     // 🌟 核心：使用 Canvas 2D 的原生擦除
+//     ctx.save();
+//     ctx.globalCompositeOperation = 'destination-out';
+//     ctx.beginPath();
+//     ctx.moveTo(lx, ly);
+//     ctx.lineTo(cx, cy);
+//     ctx.lineWidth = (radius * 2) / Math.abs(obj.scale.x);
+//     ctx.lineCap = 'round';
+//     ctx.lineJoin = 'round';
+//     ctx.stroke();
+//     ctx.restore();
 
-//     // 🌟 3. 计算相对位移
-//     // (鼠标当前世界点 - 图片中心点) / 图片自身缩放
-//     const lx = (lastX - worldX) / obj.scale.x;
-//     const ly = (lastY - worldY) / obj.scale.y;
-//     const cx = (currentX - worldX) / obj.scale.x;
-//     const cy = (currentY - worldY) / obj.scale.y;
-
-//     // 🌟 4. 坐标系归位
-//     // 因为纹理渲染是从左上角(0,0)开始的，
-//     // 而图片通常是中心对齐(anchor 0.5)，所以要加回一半的原始像素
-//     const ox = texW / 2;
-//     const oy = texH / 2;
-
-//     this.eraseBrush.clear();
-
-
-//     this.eraseBrush.blendMode = 'normal';
-//     // 必须先设为 normal 画出路径，背景色代表“要擦除的区域”
-//     this.eraseBrush
-//       .moveTo(lx + ox, ly + oy)
-//       .lineTo(cx + ox, cy + oy)
-//       .stroke({
-//         // 核心：半径也要除以缩放，否则你放大画布擦，笔触会变得巨大
-//         width: (radius * 2) / Math.abs(obj.scale.x),
-//         color: 0x1a1a1a,
-//         alpha: 1,
-//         cap: 'round',
-//         join: 'round'
-//       });
-
-
-//     const wrap = new PIXI.Container();
-//     wrap.addChild(this.eraseBrush);
-//     wrap.blendMode = 'erase';
-//     // 执行渲染：只往这一个图片的纹理里画
-//     this.app.renderer.render({
-//       container: wrap,
-//       target: obj.texture,
-//       clear: false,
-//     });
-//     wrap.removeChild(this.eraseBrush);
-//     // 状态复位
-//     // this.eraseBrush.blendMode = 'normal';
+//     // 🌟 关键：通知 Pixi 纹理更新了
+//     obj.texture.source.update(); 
 //   });
 // }
+
 
   // 渲染图片
   renderImage(x, y, imageUrl, options = {}) {

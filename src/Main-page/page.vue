@@ -492,10 +492,11 @@ const handleMouseUp = async (e) => {
     isPainting.value = false
     if (activeLine.value) {
             // 🌟 告诉 store：这一划画完了，存起来
+            const erasableLineSprite = await canvasStore.renderer.prepareErasableGraphics(activeLine.value);
             activeLine.value.isBrushLine = true;
             activeLine.value.type = 'line'
             activeLine.value.isFineErasable = true
-            canvasStore.renderer.objects.push(markRaw(activeLine.value));
+            canvasStore.renderer.objects.push(markRaw(erasableLineSprite));
             canvasStore.notifyObjectsChange()
             activeLine.value = null;
         }
