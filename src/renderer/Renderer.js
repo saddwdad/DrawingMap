@@ -896,6 +896,18 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
   }
 
   bindInteractivity(display, rendererInstance) {
+    function throttle(fn, delay){
+      let last = Date.now()
+      return function(){
+        const context = this
+        const args = [...arguments]
+        let now = Date.now()
+        if(now - last >= delay){
+          last = Date.now()
+          return fn.apply(context,args)
+        }
+      }
+    }
       try {
           const canvasStore = useCanvasStore(); 
           const historyStore = useHistoryStore(); 
@@ -961,9 +973,8 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
               }
           });
 
-          // --- 鼠标移动事件 (pointermove) ---
-          display.on('pointermove', (e) => {
-              if (renderer.isDraggingGroup) {
+          const pointerMove = (e)=>{
+            if (renderer.isDraggingGroup) {
                   const globalPos = e.global;
                   const stagePos = renderer.stage.toLocal(globalPos);
                   const firstObj = renderer.selectedObjects[0];
@@ -985,7 +996,7 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
                       } 
                   });
 
-                  canvasStore.notifyObjectsChange(); 
+                  
                   return;
               }
               
@@ -1004,6 +1015,12 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
                   }
               }
               canvasStore.notifyObjectsChange(); 
+          }
+          const handleMoveThroletted = throttle(pointerMove, 16)
+          // --- 鼠标移动事件 (pointermove) ---
+          display.on('pointermove', (e) => {
+            
+              handleMoveThroletted(e)
           });
 
           // --- 鼠标抬起事件 (pointerup) ---
@@ -1019,7 +1036,7 @@ fineEraseLine(currentX, currentY, lastX, lastY, radius) {
                   x: obj.position.x,
                   y: obj.position.y
               }));
-
+              canvasStore.notifyObjectsChange(); 
               const startSnapshotForHistory = renderer.dragStartSnapshot;
 
               if (JSON.stringify(startSnapshotForHistory) !== JSON.stringify(dragEndSnapshot)) {
